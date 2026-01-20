@@ -46,10 +46,13 @@ from database.models import get_db_manager
 st.set_page_config(page_title="Job Editor with Agent", layout="wide")
 
 # Password protection (MVP testing safeguard)
+# Check authentication FIRST, before any other UI rendering
 if config.STREAMLIT_PASSWORD:
+    # Initialize authenticated state if not present
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     
+    # Only show login screen if not authenticated
     if not st.session_state.authenticated:
         st.title("🔒 Access Required")
 
@@ -65,14 +68,15 @@ if config.STREAMLIT_PASSWORD:
 
             if username_ok and password_ok:
                 st.session_state.authenticated = True
+                st.rerun()  # Refresh to show authenticated view
             else:
                 if config.STREAMLIT_USERNAME and not username_ok:
                     st.error("Incorrect username. Please try again.")
                 else:
                     st.error("Incorrect password. Please try again.")
-        # Only stop the app if authentication is still false after handling the form
-        if not st.session_state.authenticated:
-            st.stop()
+        
+        # Stop execution if not authenticated (prevents rest of app from rendering)
+        st.stop()
 
 # Initialize session state
 # Use setdefault to only set if not already present (preserves user input)
