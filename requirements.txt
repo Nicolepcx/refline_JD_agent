@@ -1,19 +1,67 @@
-streamlit
-langchain==1.2.0
-langgraph==1.0.5
-langchain-openai
-langchain_experimental==0.4.1
-langchain_community
-langchain_core
+# Core Framework
+streamlit==1.52.2
 python-dotenv==1.0.1
+pydantic==2.12.5
+pydantic-settings==2.12.0
+pydantic_core==2.41.5
+
+# LangChain & AI Orchestration
+langchain==1.2.0
+langchain-community==0.4.1
+langchain-core==1.2.6
+langchain-openai==1.1.6
+langchain-experimental==0.4.1
+langchain-text-splitters==1.1.0
+langsmith==0.6.1
+langgraph==1.0.5
+langgraph-checkpoint==3.0.1
+langgraph-prebuilt==1.0.5
+langgraph-sdk==0.3.1
+litellm==1.74.1
+openai==1.99.1
 openpipe-art==0.5.0
-langgraph-checkpoint-sqlite==3.0.1
-pydantic>=2.0.0
-aiosqlite
-sqlalchemy>=2.0.0
-# Scraping dependencies
-beautifulsoup4>=4.12.0
+weave==0.52.22
+tiktoken==0.12.0
+tokenizers==0.22.2
+
+# Database & Storage
+sqlalchemy==2.0.45
+aiosqlite==0.22.1
+faiss-cpu>=1.7.4
+# chromadb>=0.4.0
+
+# Scraping & Data Processing
+beautifulsoup4==4.14.3
 lxml>=4.9.0
-# Vector DB dependencies (optional - choose one or both)
-faiss-cpu>=1.7.4  # Local vector store (recommended for MVP)
-# chromadb>=0.4.0  # Alternative vector store (uncomment if preferred)
+soupsieve==2.8.1
+pdfminer.six==20250506
+pandas==2.3.3
+numpy==2.4.0
+pyarrow==22.0.0
+
+# Networking & Utilities
+httpx==0.28.1
+httpx-sse==0.4.3
+aiohttp==3.13.3
+requests==2.32.5
+urllib3==2.6.2
+certifi==2026.1.4
+tenacity==9.1.2
+tqdm==4.67.1
+rich==14.2.0
+PyYAML==6.0.3
+
+# Git & Versioning
+GitPython==3.1.46
+gitdb==4.0.12
+
+# Essential Dependencies (Sub-packages)
+altair==6.0.0
+attrs==25.4.0
+click==8.3.1
+huggingface_hub==1.2.4
+Jinja2==3.1.6
+jsonschema==4.25.1
+packaging==25.0
+pillow==12.1.0
+typing_extensions==4.15.0
