@@ -12,13 +12,12 @@ langchain-openai
 langchain-experimental
 langchain-text-splitters>=0.3.0
 langgraph
-langgraph-checkpoint==3.0.1
-langgraph-prebuilt==1.0.5
-langgraph-sdk==0.3.1
+langgraph-checkpoint
+langgraph-prebuilt
 litellm==1.74.1
 
 # --- AI & Tooling ---
-openai==1.99.1
+openai
 openpipe-art==0.5.0
 weave==0.52.22
 tiktoken==0.12.0
