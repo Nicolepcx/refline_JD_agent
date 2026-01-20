@@ -65,13 +65,14 @@ if config.STREAMLIT_PASSWORD:
 
             if username_ok and password_ok:
                 st.session_state.authenticated = True
-                st.rerun()
             else:
                 if config.STREAMLIT_USERNAME and not username_ok:
                     st.error("Incorrect username. Please try again.")
                 else:
                     st.error("Incorrect password. Please try again.")
-        st.stop()
+        # Only stop the app if authentication is still false after handling the form
+        if not st.session_state.authenticated:
+            st.stop()
 
 # Initialize session state
 # Use setdefault to only set if not already present (preserves user input)
