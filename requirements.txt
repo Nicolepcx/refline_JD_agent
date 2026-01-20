@@ -1,0 +1,19 @@
+streamlit
+langchain==1.2.0
+langgraph==1.0.5
+langchain-openai
+langchain_experimental==0.4.1
+langchain_community
+langchain_core
+python-dotenv==1.0.1
+openpipe-art==0.5.0
+langgraph-checkpoint-sqlite==3.0.1
+pydantic>=2.0.0
+aiosqlite
+sqlalchemy>=2.0.0
+# Scraping dependencies
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+# Vector DB dependencies (optional - choose one or both)
+faiss-cpu>=1.7.4  # Local vector store (recommended for MVP)
+# chromadb>=0.4.0  # Alternative vector store (uncomment if preferred)

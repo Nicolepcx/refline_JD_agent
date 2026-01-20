@@ -1,0 +1,99 @@
+from textwrap import dedent
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+# Environment configuration
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Expose keys in os.environ for downstream libraries (LiteLLM / OpenAI-compatible clients).
+if OPENROUTER_API_KEY:
+    os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+
+# If the user only configured OpenRouter, provide an OpenAI-compatible fallback env
+# for libraries that only look at OPENAI_* (without affecting explicit OpenRouter usage).
+if OPENROUTER_API_KEY and not OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENROUTER_API_KEY
+    os.environ["OPENAI_BASE_URL"] = OPENROUTER_BASE_URL
+elif OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
+# Langfuse Configuration for Agent Tracing (Standard - enabled when keys are present)
+LANGFUSE_BASE_URL = os.getenv('LANGFUSE_BASE_URL', 'https://cloud.langfuse.com')
+LANGFUSE_SECRET_KEY = os.getenv('LANGFUSE_SECRET_KEY')
+LANGFUSE_PUBLIC_KEY = os.getenv('LANGFUSE_PUBLIC_KEY')
+LANGFUSE_ENABLED = bool(LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY)
+
+# Set Langfuse environment variables for CallbackHandler (reads from os.environ automatically)
+# CallbackHandler() reads LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY, and LANGFUSE_HOST from environment
+if LANGFUSE_SECRET_KEY:
+    os.environ['LANGFUSE_SECRET_KEY'] = LANGFUSE_SECRET_KEY
+if LANGFUSE_PUBLIC_KEY:
+    os.environ['LANGFUSE_PUBLIC_KEY'] = LANGFUSE_PUBLIC_KEY
+if LANGFUSE_BASE_URL and LANGFUSE_BASE_URL != 'https://cloud.langfuse.com':
+    os.environ['LANGFUSE_HOST'] = LANGFUSE_BASE_URL
+
+# Note: Langfuse status will be logged in app.py after logging is initialized
+# to avoid circular import issues
+
+# Logging Configuration
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+LOG_FILE = os.getenv('LOG_FILE')  # Set to filename to enable file logging
+LOG_DIR = os.getenv('LOG_DIR', './logs')
+
+# RULER / Concurrency Defaults
+# 0 disables pruning by default; set >0 to enable top-K pruning.
+RULER_TOP_K_DEFAULT = int(os.getenv("RULER_TOP_K_DEFAULT", "0"))
+
+# LLM Model Configuration
+# All model names used throughout the application are centralized here.
+# Models are specified as OpenRouter model identifiers WITHOUT the "openrouter/" prefix
+# when using ChatOpenAI with base_url=OPENROUTER_BASE_URL (OpenRouter accepts both formats).
+# For RULER scoring (which uses model strings directly), we use the full format with prefix.
+#
+# OpenRouter Provider Routing & Latency Optimization:
+# - All models use provider routing optimized for latency (sort: "latency")
+# - For Qwen 3 models: additionally disable thinking tokens to reduce latency further
+# - Performance thresholds (p90 percentile) can be set via environment variables:
+#   - OPENROUTER_PREFERRED_MAX_LATENCY_P90: max latency in seconds (default: 3.0)
+#   - OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90: min throughput in tokens/sec (default: 50.0)
+# These thresholds prefer providers meeting the requirements but don't exclude others.
+
+# Base/Writer Model: Used for generating job description candidates
+# Format: "qwen/qwen3-32b" (no openrouter/ prefix needed when using ChatOpenAI with base_url)
+MODEL_BASE = os.getenv("MODEL_BASE", "qwen/qwen3-32b")
+
+# Style Model: Used for refining job descriptions based on feedback
+# Format: "google/gemma-2-9b-it" (no openrouter/ prefix needed when using ChatOpenAI with base_url)
+MODEL_STYLE = os.getenv("MODEL_STYLE", "google/gemma-2-9b-it")
+
+# RULER Judge Model: Used for scoring/ranking job description candidates (fast model for evaluation)
+# Format: "openrouter/openai/o3-mini" (full format with prefix for RULER which uses model strings directly)
+MODEL_RULER_JUDGE = os.getenv("MODEL_RULER_JUDGE", "openrouter/openai/o3-mini")
+
+# RULER Judge Fallback: Fallback model if primary judge model fails
+# Format: "openrouter/openai/o3-mini" (full format with prefix for RULER which uses model strings directly)
+MODEL_RULER_JUDGE_FALLBACK = os.getenv("MODEL_RULER_JUDGE_FALLBACK", "openrouter/openai/o3-mini")
+
+# OpenRouter Provider Routing Configuration
+# Optimize for latency by prioritizing providers with lowest latency
+# Set preferred_max_latency thresholds (in seconds) to prefer providers meeting these requirements
+# Using p90 percentile ensures 90% of requests meet the latency threshold
+OPENROUTER_PREFERRED_MAX_LATENCY_P90 = float(os.getenv("OPENROUTER_PREFERRED_MAX_LATENCY_P90", "3.0"))  # 3 seconds at p90
+OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90 = float(os.getenv("OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90", "50.0"))  # 50 tokens/sec at p90
+
+# Default job advertisement values (all empty initially)
+DEFAULT_JOB_DATA = {
+    "job_headline": "",
+    "job_intro": "",
+    "caption": "",
+    "description": "",
+    "requirements": "",
+    "duties": "",
+    "benefits": "",
+    "footer": "",
+}
+
