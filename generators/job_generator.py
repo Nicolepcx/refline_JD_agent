@@ -163,14 +163,18 @@ def render_job_body(
         )
 
     # benefits line - STRICT: Only use provided keywords, no additions
+    # IMPORTANT: Expand keywords into full, grammatically correct sentences (like skills)
     benefit_tags = ", ".join(cfg.benefit_keywords) if cfg.benefit_keywords else ""
     if lang == "en":
         if benefit_tags:
             benefits_line = (
-                "IMPORTANT: For benefits, you MUST ONLY use these exact benefit keywords and turn them into nicely written bullet points. "
-                f"Do NOT add any other benefits beyond these: {benefit_tags}. "
+                "IMPORTANT: For benefits, you MUST ONLY use these exact benefit keywords: {benefit_tags}. "
+                "Expand each keyword into a full, grammatically correct sentence. "
+                "For example: 'remote work switzerland' should become 'Remote work in Switzerland' or 'Remote work opportunities in Switzerland'. "
+                "Each benefit must be a complete sentence, not just a phrase. "
+                "Do NOT add any other benefits beyond these keywords. "
                 "Create exactly one bullet point per keyword provided."
-            )
+            ).format(benefit_tags=benefit_tags)
         else:
             # If no benefit keywords provided, return empty benefits
             benefits_line = (
@@ -179,10 +183,13 @@ def render_job_body(
     else:
         if benefit_tags:
             benefits_line = (
-                "WICHTIG: Für Benefits musst du AUSSCHLIESSLICH diese genannten Benefit Stichworte verwenden und daraus ansprechende Bullet Points formulieren. "
-                f"Füge KEINE weiteren Benefits hinzu außer diesen: {benefit_tags}. "
+                "WICHTIG: Für Benefits musst du AUSSCHLIESSLICH diese genannten Benefit Stichworte verwenden: {benefit_tags}. "
+                "Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz. "
+                "Zum Beispiel: 'Remote Work Schweiz' sollte zu 'Remote Work in der Schweiz' oder 'Remote Work Möglichkeiten in der Schweiz' werden. "
+                "Jeder Benefit muss ein vollständiger Satz sein, nicht nur eine Phrase. "
+                "Füge KEINE weiteren Benefits hinzu außer diesen Stichwörtern. "
                 "Erstelle genau einen Bullet Point pro angegebenem Stichwort."
-            )
+            ).format(benefit_tags=benefit_tags)
         else:
             benefits_line = (
                 "WICHTIG: Es wurden keine Benefit Stichworte angegeben. Das Benefits Feld muss eine leere Liste [] sein."
@@ -231,7 +238,7 @@ def render_job_body(
             "Produce a JobBody instance in English.\n"
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
-            "benefits: ONLY use the benefit keywords provided above. Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
+            "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
             "duties: 5 to 8 bullets describing day to day responsibilities.\n"
             "summary: 1 short closing line inviting candidates to apply.\n"
         )
@@ -248,7 +255,7 @@ def render_job_body(
             "Erstelle eine JobBody Struktur auf Deutsch.\n"
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
-            "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
+            "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
             "duties: 5 bis 8 Stichpunkte zu den täglichen Aufgaben.\n"
             "summary: 1 kurzer Abschlusssatz, der zur Bewerbung einlädt.\n"
         )
@@ -424,14 +431,18 @@ async def render_job_body_async(
         )
 
     # benefits line - STRICT: Only use provided keywords, no additions
+    # IMPORTANT: Expand keywords into full, grammatically correct sentences (like skills)
     benefit_tags = ", ".join(cfg.benefit_keywords) if cfg.benefit_keywords else ""
     if lang == "en":
         if benefit_tags:
             benefits_line = (
-                "IMPORTANT: For benefits, you MUST ONLY use these exact benefit keywords and turn them into nicely written bullet points. "
-                f"Do NOT add any other benefits beyond these: {benefit_tags}. "
+                "IMPORTANT: For benefits, you MUST ONLY use these exact benefit keywords: {benefit_tags}. "
+                "Expand each keyword into a full, grammatically correct sentence. "
+                "For example: 'remote work switzerland' should become 'Remote work in Switzerland' or 'Remote work opportunities in Switzerland'. "
+                "Each benefit must be a complete sentence, not just a phrase. "
+                "Do NOT add any other benefits beyond these keywords. "
                 "Create exactly one bullet point per keyword provided."
-            )
+            ).format(benefit_tags=benefit_tags)
         else:
             # If no benefit keywords provided, return empty benefits
             benefits_line = (
@@ -440,10 +451,13 @@ async def render_job_body_async(
     else:
         if benefit_tags:
             benefits_line = (
-                "WICHTIG: Für Benefits musst du AUSSCHLIESSLICH diese genannten Benefit Stichworte verwenden und daraus ansprechende Bullet Points formulieren. "
-                f"Füge KEINE weiteren Benefits hinzu außer diesen: {benefit_tags}. "
+                "WICHTIG: Für Benefits musst du AUSSCHLIESSLICH diese genannten Benefit Stichworte verwenden: {benefit_tags}. "
+                "Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz. "
+                "Zum Beispiel: 'Remote Work Schweiz' sollte zu 'Remote Work in der Schweiz' oder 'Remote Work Möglichkeiten in der Schweiz' werden. "
+                "Jeder Benefit muss ein vollständiger Satz sein, nicht nur eine Phrase. "
+                "Füge KEINE weiteren Benefits hinzu außer diesen Stichwörtern. "
                 "Erstelle genau einen Bullet Point pro angegebenem Stichwort."
-            )
+            ).format(benefit_tags=benefit_tags)
         else:
             benefits_line = (
                 "WICHTIG: Es wurden keine Benefit Stichworte angegeben. Das Benefits Feld muss eine leere Liste [] sein."
@@ -492,7 +506,7 @@ async def render_job_body_async(
             "Produce a JobBody instance in English.\n"
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
-            "benefits: ONLY use the benefit keywords provided above. Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
+            "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
             "duties: 5 to 8 bullets describing day to day responsibilities.\n"
             "summary: 1 short closing line inviting candidates to apply.\n"
         )
@@ -509,7 +523,7 @@ async def render_job_body_async(
             "Erstelle eine JobBody Struktur auf Deutsch.\n"
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
-            "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
+            "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
             "duties: 5 bis 8 Stichpunkte zu den täglichen Aufgaben.\n"
             "summary: 1 kurzer Abschlusssatz, der zur Bewerbung einlädt.\n"
         )
