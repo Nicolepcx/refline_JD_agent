@@ -616,18 +616,20 @@ def should_refine_again(state: JobState) -> str:
 async def build_job_graph(
     *,
     sqlite_path: str = "jd_threads.sqlite",
-    use_persistent_store: bool = False
+    use_persistent_store: bool = False,
+    postgres_connection_string: Optional[str] = None
 ):
     """
     Build the LangGraph workflow for job description generation.
     
     Uses LangGraph's store system for user interactions across threads.
-    - InMemoryStore: For development/testing (default)
-    - PostgresStore: For production (when use_persistent_store=True)
+    - SQLite + InMemoryStore: For local development (default)
+    - PostgreSQL + PostgresStore: For production (when postgres_connection_string is provided)
     
     Args:
-        sqlite_path: Path to SQLite database for checkpointer
+        sqlite_path: Path to SQLite database for checkpointer (used if postgres_connection_string is None)
         use_persistent_store: If True, use PostgresStore; if False, use InMemoryStore
+        postgres_connection_string: PostgreSQL connection string (if provided, uses PostgreSQL instead of SQLite)
         
     Returns:
         Compiled graph, connection (if SQLite), and store
@@ -727,29 +729,54 @@ async def build_job_graph(
     workflow.add_edge("curator", "persist")
     workflow.add_edge("persist", END)
     
-    # Setup checkpointer for thread state
-    if AsyncSqliteSaver is not None and conn is not None:
-        checkpointer = AsyncSqliteSaver(conn)
-    else:
-        # Use MemorySaver as fallback if SQLite checkpoint is not available
-        from langgraph.checkpoint.memory import MemorySaver
-        checkpointer = MemorySaver()
-        conn = None
-    
-    # Setup store for user interactions across threads
-    # InMemoryStore for development, PostgresStore for production
-    if use_persistent_store:
+    # Setup checkpointer and store based on environment
+    # If PostgreSQL connection string is provided, use PostgreSQL; otherwise use SQLite
+    if postgres_connection_string:
+        # Production: Use PostgreSQL for both checkpointer and store
         try:
             from langgraph.store.postgres import PostgresStore
-            # For production, you would configure Postgres connection
-            # For now, fall back to InMemoryStore
-            store = InMemoryStore()
-        except ImportError:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            
+            store = PostgresStore(connection_string=postgres_connection_string)
+            checkpointer = AsyncPostgresSaver(connection_string=postgres_connection_string)
+            conn = None  # No SQLite connection needed
+            logger.info("Using PostgreSQL for checkpointer and store (production mode)")
+        except ImportError as e:
+            logger.warning(f"PostgreSQL support not available: {e}. Falling back to SQLite.")
+            # Fall back to SQLite if PostgreSQL packages aren't installed
+            if AsyncSqliteSaver is not None and conn is not None:
+                checkpointer = AsyncSqliteSaver(conn)
+            else:
+                from langgraph.checkpoint.memory import MemorySaver
+                checkpointer = MemorySaver()
+                conn = None
             store = InMemoryStore()
     else:
-        # Use InMemoryStore - LangGraph handles this automatically
-        # Memories are namespaced by (user_id, "gold_standard") or (user_id, "user_gripes")
-        store = InMemoryStore()
+        # Local development: Use SQLite for checkpointer, InMemoryStore for store
+        if AsyncSqliteSaver is not None and conn is not None:
+            checkpointer = AsyncSqliteSaver(conn)
+        else:
+            # Use MemorySaver as fallback if SQLite checkpoint is not available
+            from langgraph.checkpoint.memory import MemorySaver
+            checkpointer = MemorySaver()
+            conn = None
+        
+        # Setup store for user interactions across threads
+        # InMemoryStore for development, PostgresStore for production
+        if use_persistent_store:
+            try:
+                from langgraph.store.postgres import PostgresStore
+                # This branch is for when use_persistent_store=True but no connection string
+                # In practice, postgres_connection_string should be set if use_persistent_store=True
+                store = InMemoryStore()
+                logger.warning("use_persistent_store=True but no postgres_connection_string provided. Using InMemoryStore.")
+            except ImportError:
+                store = InMemoryStore()
+        else:
+            # Use InMemoryStore - LangGraph handles this automatically
+            # Memories are namespaced by (user_id, "gold_standard") or (user_id, "user_gripes")
+            store = InMemoryStore()
+            logger.info("Using SQLite checkpointer and InMemoryStore (local development mode)")
     
     # Compile graph with both checkpointer (for threads) and store (for user memory)
     compiled_graph = workflow.compile(checkpointer=checkpointer, store=store)

@@ -29,7 +29,7 @@ else:
     logger.info("Langfuse tracing not configured (API keys not set in .env)")
 
 import streamlit as st
-from config import DEFAULT_JOB_DATA
+import config
 from ui.layout import (
     render_header,
     render_title,
@@ -42,9 +42,40 @@ from ui.feedback_panel import render_feedback_buttons, render_history_panel
 from ui.company_scraper_panel import render_company_scraper_panel
 from database.models import get_db_manager
 
+# Page configuration
+st.set_page_config(page_title="Job Editor with Agent", layout="wide")
+
+# Password protection (MVP testing safeguard)
+if config.STREAMLIT_PASSWORD:
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        st.title("🔒 Access Required")
+
+        # Username is optional; require it only if set in env
+        username_input = None
+        if config.STREAMLIT_USERNAME:
+            username_input = st.text_input("Username:")
+
+        password_input = st.text_input("Password:", type="password")
+        if st.button("Login"):
+            username_ok = (not config.STREAMLIT_USERNAME) or (username_input == config.STREAMLIT_USERNAME)
+            password_ok = password_input == config.STREAMLIT_PASSWORD
+
+            if username_ok and password_ok:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                if config.STREAMLIT_USERNAME and not username_ok:
+                    st.error("Incorrect username. Please try again.")
+                else:
+                    st.error("Incorrect password. Please try again.")
+        st.stop()
+
 # Initialize session state
 # Use setdefault to only set if not already present (preserves user input)
-for k, v in DEFAULT_JOB_DATA.items():
+for k, v in config.DEFAULT_JOB_DATA.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -60,9 +91,6 @@ if "user_id" not in st.session_state:
 
 # Initialize database
 db = get_db_manager()
-
-# Page configuration
-st.set_page_config(page_title="Job Editor with Agent", layout="wide")
 
 # Custom CSS and JavaScript for button, checkbox, and slider colors
 st.markdown("""
@@ -200,5 +228,5 @@ with right:
     # Add feedback buttons below preview
     job_title = st.session_state.get("job_headline", "")
     if job_title:
-        job_dict = {k: st.session_state.get(k, "") for k in DEFAULT_JOB_DATA.keys()}
+        job_dict = {k: st.session_state.get(k, "") for k in config.DEFAULT_JOB_DATA.keys()}
         render_feedback_buttons(job_title, job_dict)

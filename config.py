@@ -85,6 +85,16 @@ MODEL_RULER_JUDGE_FALLBACK = os.getenv("MODEL_RULER_JUDGE_FALLBACK", "openrouter
 OPENROUTER_PREFERRED_MAX_LATENCY_P90 = float(os.getenv("OPENROUTER_PREFERRED_MAX_LATENCY_P90", "3.0"))  # 3 seconds at p90
 OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90 = float(os.getenv("OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90", "50.0"))  # 50 tokens/sec at p90
 
+# Database Configuration
+# For local development: Leave unset to use SQLite
+# For production (DigitalOcean): Set POSTGRES_CONNECTION_STRING to use PostgreSQL
+POSTGRES_CONNECTION_STRING = os.getenv("POSTGRES_CONNECTION_STRING")
+USE_PERSISTENT_STORE = bool(POSTGRES_CONNECTION_STRING)  # Auto-detect: use PostgreSQL if connection string is provided
+
+# Streamlit Password Protection (MVP testing safeguard)
+STREAMLIT_USERNAME = os.getenv("STREAMLIT_USERNAME")  # Set in .env to enable username requirement
+STREAMLIT_PASSWORD = os.getenv("STREAMLIT_PASSWORD")  # Set in .env to enable password protection
+
 # Default job advertisement values (all empty initially)
 DEFAULT_JOB_DATA = {
     "job_headline": "",

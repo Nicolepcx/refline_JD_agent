@@ -10,7 +10,7 @@ from utils import job_body_to_dict
 from database.models import get_db_manager
 from logging_config import get_logger
 from tracing.langfuse_tracing import get_langfuse_callbacks
-from config import LANGFUSE_ENABLED
+from config import LANGFUSE_ENABLED, USE_PERSISTENT_STORE, POSTGRES_CONNECTION_STRING
 
 logger = get_logger(__name__)
 
@@ -88,8 +88,12 @@ async def _generate_with_graph_impl(
     from langchain_core.runnables import RunnableConfig
     from database.store_sync import sync_all_to_store
     
-    # Build graph
-    graph, conn, store = await build_job_graph()
+    # Build graph with environment-based database configuration
+    # Uses PostgreSQL if POSTGRES_CONNECTION_STRING is set, otherwise SQLite (local dev)
+    graph, conn, store = await build_job_graph(
+        use_persistent_store=USE_PERSISTENT_STORE,
+        postgres_connection_string=POSTGRES_CONNECTION_STRING
+    )
     logger.info(f"Starting job generation for: {job_title} (user: {user_id})")
     
     try:
