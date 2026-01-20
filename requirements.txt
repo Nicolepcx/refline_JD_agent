@@ -3,13 +3,13 @@ streamlit==1.52.2
 python-dotenv==1.0.1
 pydantic==2.12.5
 pydantic-settings==2.12.0
-pydantic_core==2.41.5
 
 # LangChain & AI Orchestration
-langchain==1.2.0
-langchain-community==0.4.1
-langchain-core==1.2.6
-langchain-openai==1.1.6
+# Loosened to allow pip to find a version compatible with openai 1.99.1
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0,<0.3.0
 langchain-experimental==0.4.1
 langchain-text-splitters==1.1.0
 langsmith==0.6.1
@@ -18,7 +18,9 @@ langgraph-checkpoint==3.0.1
 langgraph-prebuilt==1.0.5
 langgraph-sdk==0.3.1
 litellm==1.74.1
-openai>=1.109.1
+
+# The Critical Fix
+openai==1.99.1
 openpipe-art==0.5.0
 weave==0.52.22
 tiktoken==0.12.0
@@ -55,7 +57,7 @@ PyYAML==6.0.3
 GitPython==3.1.46
 gitdb==4.0.12
 
-# Essential Dependencies (Sub-packages)
+# Essential Dependencies
 altair==6.0.0
 attrs==25.4.0
 click==8.3.1
