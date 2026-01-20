@@ -5,13 +5,12 @@ pydantic==2.12.5
 pydantic-settings==2.12.0
 
 # --- LangChain & AI Orchestration ---
-# Note: Pinning these to 0.3.x ensures compatibility with OpenAI 1.x
 langchain==0.3.0
 langchain-community==0.3.0
 langchain-core==0.3.0
 langchain-openai==0.2.14
 langchain-experimental==0.4.1
-langchain-text-splitters==1.1.0
+langchain-text-splitters>=0.3.0
 langsmith==0.6.1
 langgraph==1.0.5
 langgraph-checkpoint==3.0.1
@@ -19,8 +18,7 @@ langgraph-prebuilt==1.0.5
 langgraph-sdk==0.3.1
 litellm==1.74.1
 
-# --- The "Trick" Reconciliation ---
-# We pin OpenAI to the absolute maximum OpenPipe allows
+# --- AI & Tooling ---
 openai==1.99.1
 openpipe-art==0.5.0
 weave==0.52.22
