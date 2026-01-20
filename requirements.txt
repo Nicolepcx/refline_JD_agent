@@ -47,6 +47,7 @@ tenacity
 tqdm==4.67.1
 rich==14.2.0
 PyYAML==6.0.3
+langfuse
 
 # --- Git & Versioning ---
 GitPython==3.1.46
