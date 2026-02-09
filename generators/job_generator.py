@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 import asyncio
-from models.job_models import JobBody, JobGenerationConfig
+from models.job_models import JobBody, JobGenerationConfig, StyleKit
 from llm_service import get_base_llm
 
 
@@ -56,6 +56,7 @@ def render_job_body(
     cfg: JobGenerationConfig,
     temperature: float | None = None,
     gold_examples: List[str] | None = None,
+    style_kit: Optional[StyleKit] = None,
 ) -> JobBody:
     """
     Pure JD generator.
@@ -68,11 +69,16 @@ def render_job_body(
         temperature: Optional temperature override
         gold_examples: Optional list of gold standard JSON strings for few-shot learning.
                       If None or empty, generation works without examples (fallback).
+        style_kit: Optional StyleKit from the Style Router (Motivkompass).
+                   When present, its prompt block is injected to guide tone, adjectives,
+                   hooks, and sentence structure.  When absent, generation works fine
+                   using the existing tone/formality system.
     
     Context Engineering for MAS:
     - Gold examples are added as few-shot examples when available
     - Examples guide style/structure but content is adapted to current job
     - Falls back gracefully when no gold standards exist
+    - StyleKit (when provided) is injected as a dedicated prompt section
     """
     cfg = cfg.with_industry_defaults()
     lang = cfg.language
@@ -224,6 +230,11 @@ def render_job_body(
                 examples_section += "Hinweis: Verwende diese Beispiele als Leitfaden für Stil, Ton und Struktur, passe aber den Inhalt an den aktuellen Stellentitel und die Anforderungen an. Nicht wörtlich kopieren.\n\n"
     # If no valid gold examples, examples_section remains empty (fallback - works without gold standards)
     
+    # Style kit section (Motivkompass) — injected when available, ignored otherwise
+    style_section = ""
+    if style_kit is not None:
+        style_section = "\n\n" + style_kit.to_prompt_block(lang) + "\n\n"
+    
     # prompt
     if lang == "en":
         prompt = (
@@ -233,6 +244,7 @@ def render_job_body(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{style_section}"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
             "Produce a JobBody instance in English.\n"
@@ -250,6 +262,7 @@ def render_job_body(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{style_section}"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
             "Erstelle eine JobBody Struktur auf Deutsch.\n"
@@ -309,11 +322,12 @@ def generate_job_body_candidate(
     cfg: JobGenerationConfig,
     temp_jitter: float = 0.0,
     gold_examples: List[str] | None = None,
+    style_kit: Optional[StyleKit] = None,
 ) -> JobBody:
     """Use the same logic as the graph, with a slightly adjusted temperature."""
     base_temp = cfg.temperature
     temp = max(0.1, min(base_temp + temp_jitter, 0.9))
-    return render_job_body(job_title, cfg, temperature=temp, gold_examples=gold_examples)
+    return render_job_body(job_title, cfg, temperature=temp, gold_examples=gold_examples, style_kit=style_kit)
 
 
 async def render_job_body_async(
@@ -321,6 +335,7 @@ async def render_job_body_async(
     cfg: JobGenerationConfig,
     temperature: float | None = None,
     gold_examples: List[str] | None = None,
+    style_kit: Optional[StyleKit] = None,
 ) -> JobBody:
     """
     Async version of render_job_body that uses ainvoke for true parallel execution.
@@ -492,6 +507,11 @@ async def render_job_body_async(
                 examples_section += "Hinweis: Verwende diese Beispiele als Leitfaden für Stil, Ton und Struktur, passe aber den Inhalt an den aktuellen Stellentitel und die Anforderungen an. Nicht wörtlich kopieren.\n\n"
     # If no valid gold examples, examples_section remains empty (fallback - works without gold standards)
     
+    # Style kit section (Motivkompass) — injected when available, ignored otherwise
+    style_section = ""
+    if style_kit is not None:
+        style_section = "\n\n" + style_kit.to_prompt_block(lang) + "\n\n"
+    
     # prompt
     if lang == "en":
         prompt = (
@@ -501,6 +521,7 @@ async def render_job_body_async(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{style_section}"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
             "Produce a JobBody instance in English.\n"
@@ -518,6 +539,7 @@ async def render_job_body_async(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{style_section}"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
             "Erstelle eine JobBody Struktur auf Deutsch.\n"
@@ -578,9 +600,10 @@ async def generate_job_body_candidate_async(
     cfg: JobGenerationConfig,
     temp_jitter: float = 0.0,
     gold_examples: List[str] | None = None,
+    style_kit: Optional[StyleKit] = None,
 ) -> JobBody:
     """Async version that uses ainvoke for true parallel execution."""
     base_temp = cfg.temperature
     temp = max(0.1, min(base_temp + temp_jitter, 0.9))
-    return await render_job_body_async(job_title, cfg, temperature=temp, gold_examples=gold_examples)
+    return await render_job_body_async(job_title, cfg, temperature=temp, gold_examples=gold_examples, style_kit=style_kit)
 

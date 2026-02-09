@@ -204,6 +204,28 @@ def render_config_sidebar():
         except Exception as e:
             pass
         
+        # Show style routing preview (Motivkompass)
+        try:
+            from helpers.config_helper import get_job_config_from_session
+            from services.style_router import route_style, explain_style_routing
+            config = get_job_config_from_session()
+            profile = route_style(config)
+            
+            # Color emoji map
+            color_emoji = {"red": "🔴", "yellow": "🟡", "blue": "🔵", "green": "🟢"}
+            primary_emoji = color_emoji.get(profile.primary_color, "⚪")
+            
+            st.markdown("---")
+            st.caption(f"**Style Profile:** {primary_emoji} {profile.primary_color.title()}"
+                       + (f" + {color_emoji.get(profile.secondary_color, '')} {profile.secondary_color.title()}"
+                          if profile.secondary_color else ""))
+            st.caption(f"Mode: {profile.interaction_mode} | Frame: {profile.reference_frame}")
+            
+            with st.expander("Style Routing Breakdown"):
+                st.code(explain_style_routing(config))
+        except Exception as e:
+            pass
+        
         # Display RULER rankings if available
         render_ruler_rankings()
 

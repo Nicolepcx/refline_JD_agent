@@ -2,6 +2,10 @@
 Vector database service for storing and retrieving scraped company content.
 Supports FAISS (local) and Chroma (local or remote).
 Modular service - blackboard architecture works without it.
+
+Embeddings are routed through OpenRouter by default (reads OPENROUTER_API_KEY
+from config).  Any OpenAI-compatible embedding model available on OpenRouter
+can be used — the model name is set via MODEL_EMBEDDING in config.py.
 """
 import os
 from pathlib import Path
@@ -33,17 +37,74 @@ except ImportError:
     pass
 
 
+def _build_embeddings(
+    embedding_model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> "OpenAIEmbeddings | None":
+    """
+    Create an OpenAIEmbeddings instance routed through OpenRouter.
+
+    Resolution order for each parameter:
+      1. Explicit argument
+      2. config.py values (if importable)
+      3. Environment variables
+      4. Sensible defaults
+    """
+    # --- resolve api_key ---
+    if not api_key:
+        try:
+            from config import OPENROUTER_API_KEY
+            api_key = OPENROUTER_API_KEY
+        except ImportError:
+            api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+    # --- resolve base_url ---
+    if not base_url:
+        try:
+            from config import OPENROUTER_BASE_URL
+            base_url = OPENROUTER_BASE_URL
+        except ImportError:
+            base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    # --- resolve model ---
+    if not embedding_model:
+        try:
+            from config import MODEL_EMBEDDING
+            embedding_model = MODEL_EMBEDDING
+        except ImportError:
+            embedding_model = os.getenv("MODEL_EMBEDDING", "openai/text-embedding-3-small")
+
+    if not api_key:
+        logger.warning("No API key found for embeddings (checked OPENROUTER_API_KEY, OPENAI_API_KEY)")
+        return None
+
+    try:
+        from langchain_openai import OpenAIEmbeddings as _OAIEmb
+        return _OAIEmb(
+            model=embedding_model,
+            openai_api_key=api_key,
+            openai_api_base=base_url,
+        )
+    except Exception as e:
+        logger.warning(f"Could not initialize embeddings: {e}", exc_info=True)
+        return None
+
+
 class VectorStoreManager:
     """
     Manages vector storage for scraped company content.
     Uses FAISS by default (local, no server needed), falls back to Chroma if FAISS unavailable.
+    Embeddings are routed through OpenRouter.
     """
     
     def __init__(
         self,
         store_type: str = "faiss",  # "faiss" or "chroma"
         persist_directory: str = "vector_store",
-        embedding_model: str = "text-embedding-3-small"
+        embedding_model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
     ):
         """
         Initialize vector store manager.
@@ -51,18 +112,16 @@ class VectorStoreManager:
         Args:
             store_type: "faiss" or "chroma"
             persist_directory: Directory to persist vector store
-            embedding_model: OpenAI embedding model name
+            embedding_model: Embedding model name (default from config / env)
+            api_key: API key (default from config / env)
+            base_url: API base URL (default from config / env)
         """
         self.store_type = store_type
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(parents=True, exist_ok=True)
         
-        # Initialize embeddings
-        try:
-            self.embeddings = OpenAIEmbeddings(model=embedding_model)
-        except Exception as e:
-            logger.warning(f"Could not initialize embeddings: {e}", exc_info=True)
-            self.embeddings = None
+        # Initialize embeddings (routed through OpenRouter)
+        self.embeddings = _build_embeddings(embedding_model, api_key, base_url)
         
         self.store = None
         self._initialize_store()
@@ -268,7 +327,7 @@ class VectorStoreManager:
 
 def get_vector_store_manager(
     store_type: Optional[str] = None,
-    persist_directory: str = "vector_store"
+    persist_directory: Optional[str] = None,
 ) -> VectorStoreManager:
     """
     Factory function to get vector store manager.
@@ -276,11 +335,19 @@ def get_vector_store_manager(
     
     Args:
         store_type: "faiss" or "chroma" (auto-selects if None)
-        persist_directory: Directory for persistence
+        persist_directory: Directory for persistence.
+            Defaults to ``VECTOR_STORE_DIR`` from config (or ``"vector_store"``).
         
     Returns:
         VectorStoreManager instance
     """
+    if persist_directory is None:
+        try:
+            from config import VECTOR_STORE_DIR
+            persist_directory = VECTOR_STORE_DIR
+        except ImportError:
+            persist_directory = os.getenv("VECTOR_STORE_DIR", "vector_store")
+
     if store_type is None:
         # Auto-select: prefer FAISS (simpler, no server)
         if FAISS_AVAILABLE:

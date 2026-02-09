@@ -8,10 +8,12 @@ from langgraph.graph.message import add_messages
 from langchain_core.runnables import RunnableConfig
 from langgraph.store.base import BaseStore
 
-from models.job_models import JobBody, JobGenerationConfig
+from models.job_models import JobBody, JobGenerationConfig, StyleKit
 import asyncio
 from generators.job_generator import generate_job_body_candidate_async
 from ruler.ruler_utils import jd_candidate_to_trajectory, score_group_with_fallback
+from services.style_router import route_style, explain_style_routing
+from services.style_retriever import retrieve_style_kit
 from logging_config import get_logger
 import art
 from art.rewards import ruler_score_group
@@ -39,6 +41,9 @@ class JobState(TypedDict, total=False):
     
     # Blackboard: candidates list
     candidates: Annotated[List[JobBody], merge_blackboard]
+    
+    # Style routing (Motivkompass)
+    style_kit: Optional[StyleKit]
     
     # Outputs
     job_body_json: Optional[str]
@@ -102,6 +107,51 @@ async def node_scrape_company(state: JobState) -> JobState:
         # If scraping fails, continue without it (modular design)
         logger.warning(f"Company scraping failed: {e}", exc_info=True)
         return {"scraped_text": None}
+
+
+async def node_style_router(state: JobState) -> Dict:
+    """
+    Style Router node — MUST run before generation.
+
+    Uses the scoring rubric to select a Motivkompass profile
+    (red/yellow/green/blue), then assembles a StyleKit from RAG or defaults.
+
+    The resulting StyleKit is placed on the blackboard for downstream nodes
+    (generator, style_expert) to consume.
+
+    See AGENTS.md §3 for the workflow contract.
+    """
+    cfg = state["config"]
+    lang = cfg.language
+
+    # 1. Route: score-based profile selection
+    profile = route_style(cfg)
+
+    # 2. Retrieve: assemble compact style kit (RAG → defaults)
+    #    Use the cached singleton from startup (avoids re-creating on every call)
+    vector_store = None
+    try:
+        from services.startup import get_style_vector_store
+        vector_store = get_style_vector_store()
+    except Exception:
+        pass  # Vector store not available — defaults will be used
+
+    kit = retrieve_style_kit(profile, lang=lang, vector_store=vector_store)
+
+    # 3. Persist profile JSON for downstream / UI consumption
+    style_profile_json = profile.model_dump_json(indent=2, ensure_ascii=False)
+
+    logger.info(
+        f"[Style Router] Routed: primary={profile.primary_color}, "
+        f"secondary={profile.secondary_color or 'none'}, "
+        f"mode={profile.interaction_mode}, frame={profile.reference_frame}"
+    )
+    logger.debug(f"[Style Router] Kit prompt block:\n{kit.to_prompt_block(lang)}")
+
+    return {
+        "style_kit": kit,
+        "style_profile_json": style_profile_json,
+    }
 
 
 async def node_generator_expert(
@@ -176,6 +226,9 @@ async def node_generator_expert(
                     if len(gold_examples) >= 2:
                         break
     
+    # Get style kit from blackboard (populated by style_router node)
+    style_kit = state.get("style_kit")
+    
     # Generate initial candidates using gold standards as examples
     num_candidates = 3
     tasks = []
@@ -187,6 +240,7 @@ async def node_generator_expert(
                 cfg,
                 temp_jitter=(i * 0.1),
                 gold_examples=gold_examples if gold_examples else None,
+                style_kit=style_kit,
             )
         )
     seeds = await asyncio.gather(*tasks)
@@ -685,6 +739,7 @@ async def build_job_graph(
     workflow = StateGraph(JobState)
     
     # Add nodes
+    workflow.add_node("style_router", node_style_router)  # Motivkompass profile selection
     workflow.add_node("scrape_company", node_scrape_company)
     workflow.add_node("generator", node_generator_expert)
     workflow.add_node("ruler_scorer", node_ruler_scorer)  # RULER scoring (test-time compute)
@@ -694,9 +749,13 @@ async def build_job_graph(
     workflow.add_node("persist", node_persist_feedback_to_store)
     
     # Add edges
-    # Run scrape and generation in parallel, then join before scoring
+    # Style Router MUST run before generation (see AGENTS.md §3)
+    # Scrape runs in parallel with style routing
+    workflow.add_edge(START, "style_router")
     workflow.add_edge(START, "scrape_company")
-    workflow.add_edge(START, "generator")
+    
+    # Generator depends on style_router (needs style_kit on blackboard)
+    workflow.add_edge("style_router", "generator")
     
     # Join scrape + generator before scoring
     workflow.add_edge("scrape_company", "ruler_scorer")

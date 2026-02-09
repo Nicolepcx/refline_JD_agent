@@ -78,12 +78,28 @@ MODEL_RULER_JUDGE = os.getenv("MODEL_RULER_JUDGE", "openrouter/openai/o3-mini")
 # Format: "openrouter/openai/o3-mini" (full format with prefix for RULER which uses model strings directly)
 MODEL_RULER_JUDGE_FALLBACK = os.getenv("MODEL_RULER_JUDGE_FALLBACK", "openrouter/openai/o3-mini")
 
+# Embedding Model: Used for vector store (style chunks, company content)
+# Format: "openai/text-embedding-3-small" (routed via OpenRouter)
+MODEL_EMBEDDING = os.getenv("MODEL_EMBEDDING", "openai/text-embedding-3-small")
+
 # OpenRouter Provider Routing Configuration
 # Optimize for latency by prioritizing providers with lowest latency
 # Set preferred_max_latency thresholds (in seconds) to prefer providers meeting these requirements
 # Using p90 percentile ensures 90% of requests meet the latency threshold
 OPENROUTER_PREFERRED_MAX_LATENCY_P90 = float(os.getenv("OPENROUTER_PREFERRED_MAX_LATENCY_P90", "3.0"))  # 3 seconds at p90
 OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90 = float(os.getenv("OPENROUTER_PREFERRED_MIN_THROUGHPUT_P90", "50.0"))  # 50 tokens/sec at p90
+
+# Vector Store / Style Index Configuration
+# Path to the FAISS vector store directory (persisted across restarts).
+# On DigitalOcean App Platform, set to a persistent-volume mount, e.g. "/app/vector_store".
+VECTOR_STORE_DIR = os.getenv("VECTOR_STORE_DIR", "vector_store")
+
+# Pre-extracted style chunks (committed to the repo).
+# Used to rebuild the FAISS index automatically when the index is missing.
+STYLE_CHUNKS_PATH = os.getenv("STYLE_CHUNKS_PATH", "style_chunks.jsonl")
+
+# Path to source PDFs (fallback if JSONL doesn't exist).
+PDF_DIR = os.getenv("PDF_DIR", "PDFs_selling_psychology")
 
 # Database Configuration
 # For local development: Leave unset to use SQLite

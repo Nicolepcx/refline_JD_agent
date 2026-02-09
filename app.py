@@ -7,6 +7,13 @@ logger = get_logger(__name__)
 
 logger.info("Starting JD Writer MAS application")
 
+# Ensure the style vector index is ready (auto-builds from JSONL if missing)
+try:
+    from services.startup import ensure_style_index
+    ensure_style_index()
+except Exception as e:
+    logger.warning(f"Style index startup check failed (will use defaults): {e}")
+
 # Initialize Langfuse tracing (standard when API keys are configured)
 from config import LANGFUSE_ENABLED, LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY
 if LANGFUSE_ENABLED:
