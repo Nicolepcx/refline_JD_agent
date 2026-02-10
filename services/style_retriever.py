@@ -133,8 +133,12 @@ _DEFAULTS: dict[str, dict[str, list[str]]] = {
     },
 }
 
-# German equivalents for de job ads
-_DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
+# Schweizer Schriftdeutsch defaults for CH job ads.
+# IMPORTANT: No ß allowed — always ss.  CH-specific vocabulary.
+#
+# Hooks are split into "Sie" (formal/neutral) and "du" (casual) variants.
+# The correct set is selected at retrieval time based on formality.
+_DEFAULTS_DE: dict[str, dict[str, list[str] | dict[str, list[str]]]] = {
     "red": {
         "do_and_dont": [
             "TUN: Direkte, handlungsorientierte Sprache verwenden",
@@ -142,14 +146,20 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
             "TUN: Geschwindigkeit, Autonomie und Entscheidungskraft betonen",
             "NICHT: Passive Formulierungen oder abschwächende Sprache",
             "NICHT: Prozessbeschreibungen oder Gremien-Sprache überladen",
+            "NICHT: Bundesdeutschen Wortschatz verwenden (kein ß, kein 'Gehalt', kein 'Urlaub')",
         ],
         "adjectives": [
             "ambitioniert", "leistungsstark", "zielstrebig",
             "ergebnisorientiert", "strategisch", "entschlossen",
             "wettbewerbsfähig", "dynamisch", "eigenverantwortlich",
         ],
-        "hooks": [
+        "hooks_sie": [
             "Gestalten Sie Ihre Karriere – mit echtem Einfluss.",
+            "Bereit für den nächsten Schritt?",
+            "Führen. Umsetzen. Bewegen.",
+        ],
+        "hooks_du": [
+            "Gestalte deine Karriere – mit echtem Einfluss.",
             "Bereit für den nächsten Schritt?",
             "Führen. Umsetzen. Bewegen.",
         ],
@@ -157,6 +167,7 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
             "Kurze, direkte Sätze – Subjekt-Verb-Objekt",
             "Durchgehend aktive Formulierungen",
             "Imperativ für Handlungsaufforderungen erlaubt",
+            "Schweizer Schriftdeutsch: kein ß, immer ss",
         ],
     },
     "yellow": {
@@ -166,12 +177,18 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
             "TUN: Vielfalt, Innovation und persönliches Wachstum zeigen",
             "NICHT: Zu formell oder bürokratisch formulieren",
             "NICHT: Starre oder kontrollierende Sprache verwenden",
+            "NICHT: Bundesdeutschen Wortschatz verwenden (kein ß, kein 'Gehalt', kein 'Urlaub')",
         ],
         "adjectives": [
             "kreativ", "flexibel", "innovativ", "inspirierend",
             "offen", "vielseitig", "begeisternd", "dynamisch",
         ],
-        "hooks": [
+        "hooks_sie": [
+            "Gestalten Sie die Zukunft mit uns!",
+            "Ihre Kreativität. Unsere Plattform.",
+            "Wo Ideen lebendig werden.",
+        ],
+        "hooks_du": [
             "Gestalte die Zukunft mit uns!",
             "Deine Kreativität. Unsere Plattform.",
             "Wo Ideen lebendig werden.",
@@ -179,7 +196,7 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
         "syntax": [
             "Lockerer Ton, abwechslungsreiche Satzlänge",
             "Fragen und Ausrufe willkommen",
-            "Direkte Ansprache ('du', 'wir')",
+            "Schweizer Schriftdeutsch: kein ß, immer ss",
         ],
     },
     "green": {
@@ -189,20 +206,27 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
             "TUN: Stabilität, Vertrauen und gegenseitige Unterstützung zeigen",
             "NICHT: Aggressive oder wettbewerbsorientierte Formulierungen",
             "NICHT: Übertreiben oder Hype verwenden",
+            "NICHT: Bundesdeutschen Wortschatz verwenden (kein ß, kein 'Gehalt', kein 'Urlaub')",
         ],
         "adjectives": [
             "unterstützend", "verlässlich", "inklusiv", "fürsorglich",
             "ausgewogen", "vertrauenswürdig", "harmonisch", "stabil",
         ],
-        "hooks": [
+        "hooks_sie": [
             "Werden Sie Teil unseres Teams.",
             "Ein Ort, an dem Sie dazugehören.",
             "Gemeinsam wachsen – in Ihrem Tempo.",
+        ],
+        "hooks_du": [
+            "Werde Teil unseres Teams.",
+            "Ein Ort, an dem du dazugehörst.",
+            "Gemeinsam wachsen – in deinem Tempo.",
         ],
         "syntax": [
             "Längere, verbindende Sätze mit sanftem Fluss",
             "Konditionale und inklusive Formulierungen ('gemeinsam', 'wir unterstützen')",
             "Keine Druck-Sprache oder Ultimaten",
+            "Schweizer Schriftdeutsch: kein ß, immer ss",
         ],
     },
     "blue": {
@@ -212,20 +236,27 @@ _DEFAULTS_DE: dict[str, dict[str, list[str]]] = {
             "TUN: Aussagen mit Zahlen oder konkreten Beispielen untermauern",
             "NICHT: Unspezifische Superlative ohne Beleg verwenden",
             "NICHT: Emotionale Manipulation oder Drucksprache",
+            "NICHT: Bundesdeutschen Wortschatz verwenden (kein ß, kein 'Gehalt', kein 'Urlaub')",
         ],
         "adjectives": [
             "analytisch", "strukturiert", "fachkundig", "präzise",
             "gründlich", "systematisch", "methodisch", "qualitätsorientiert",
         ],
-        "hooks": [
+        "hooks_sie": [
             "Exzellenz durch Expertise.",
             "Aufgebaut auf Qualität. Angetrieben durch Daten.",
             "Präzision zählt – und Sie auch.",
+        ],
+        "hooks_du": [
+            "Exzellenz durch Expertise.",
+            "Aufgebaut auf Qualität. Angetrieben durch Daten.",
+            "Präzision zählt – und du auch.",
         ],
         "syntax": [
             "Klare Leitsätze gefolgt von Belegen",
             "Präzise, faktische Sprache – keine Füllwörter",
             "Nummerierte oder strukturierte Listen wo sinnvoll",
+            "Schweizer Schriftdeutsch: kein ß, immer ss",
         ],
     },
 }
@@ -239,6 +270,7 @@ def retrieve_style_kit(
     profile: StyleProfile,
     lang: str = "en",
     vector_store: Optional[object] = None,
+    formality: str = "neutral",
 ) -> StyleKit:
     """
     Assemble a StyleKit for the given profile.
@@ -250,6 +282,7 @@ def retrieve_style_kit(
         profile: The StyleProfile from the Style Router.
         lang: Language code ("en" or "de").
         vector_store: Optional VectorStoreManager instance.
+        formality: "casual", "neutral", or "formal" — controls Sie/du in DE hooks.
 
     Returns:
         A populated StyleKit ready for prompt injection.
@@ -272,9 +305,9 @@ def retrieve_style_kit(
             logger.warning(f"[Style Retriever] RAG retrieval failed, using defaults: {e}")
 
     # ── Fallback: hardcoded defaults ──
-    _fill_defaults(kit, profile, lang)
+    _fill_defaults(kit, profile, lang, formality=formality)
     logger.info(
-        f"[Style Retriever] Defaults ({lang}): "
+        f"[Style Retriever] Defaults ({lang}, {formality}): "
         f"primary={profile.primary_color} "
         f"secondary={profile.secondary_color or 'none'}"
     )
@@ -355,14 +388,31 @@ def _fill_from_rag(kit: StyleKit, profile: StyleProfile, vs: object) -> bool:
 # Hardcoded default filler
 # ---------------------------------------------------------------------------
 
-def _fill_defaults(kit: StyleKit, profile: StyleProfile, lang: str = "en") -> None:
+def _pick_hooks(color_data: dict, lang: str, formality: str) -> list[str]:
+    """Select the correct hook variant based on language and formality.
+
+    For German: casual → hooks_du, neutral/formal → hooks_sie.
+    For English: always use the single 'hooks' list.
+    """
+    if lang == "de":
+        key = "hooks_du" if formality == "casual" else "hooks_sie"
+        return list(color_data.get(key, color_data.get("hooks", [])))
+    return list(color_data.get("hooks", []))
+
+
+def _fill_defaults(
+    kit: StyleKit,
+    profile: StyleProfile,
+    lang: str = "en",
+    formality: str = "neutral",
+) -> None:
     """Fill kit from hardcoded defaults for primary (and optional secondary) color."""
     source = _DEFAULTS_DE if lang == "de" else _DEFAULTS
 
     primary = source.get(profile.primary_color, source["blue"])
     kit.do_and_dont = list(primary["do_and_dont"])
     kit.preferred_adjectives = list(primary["adjectives"])
-    kit.hook_templates = list(primary["hooks"])
+    kit.hook_templates = _pick_hooks(primary, lang, formality)
     kit.syntax_constraints = list(primary["syntax"])
 
     # Sprinkle secondary elements if present (max 2 adjectives + 1 hook)
@@ -373,7 +423,8 @@ def _fill_defaults(kit: StyleKit, profile: StyleProfile, lang: str = "en") -> No
             if adj not in kit.preferred_adjectives:
                 kit.preferred_adjectives.append(adj)
         # Add one secondary hook
-        if secondary["hooks"]:
-            hook = secondary["hooks"][0]
+        sec_hooks = _pick_hooks(secondary, lang, formality)
+        if sec_hooks:
+            hook = sec_hooks[0]
             if hook not in kit.hook_templates:
                 kit.hook_templates.append(hook)

@@ -62,9 +62,8 @@ def render_feedback_buttons(job_title: str, job_body_dict: dict):
             height=80,
             placeholder="What would you like to change?"
         )
-        # Optional targeted application of feedback to a specific section
+        # Targeted application of feedback to a specific section
         section_label_map = {
-            "": None,
             "Description": "description",
             "Requirements": "requirements",
             "Duties": "duties",
@@ -74,7 +73,7 @@ def render_feedback_buttons(job_title: str, job_body_dict: dict):
             "Title": "job_headline",
         }
         target_label = st.selectbox(
-            "Apply feedback to section (optional)",
+            "Apply feedback to section",
             list(section_label_map.keys()),
             key="feedback_target_section",
         )

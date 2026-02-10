@@ -85,13 +85,13 @@ All settings are available in the sidebar under "⚙️ Generation Settings".
 - **Impact on Temperature**: Affects LLM temperature (casual = higher, formal = lower)
 
 #### Company Type
-- **Options**: `startup`, `scaleup`, `corporate`, `public_sector`, `agency`, `consulting`
+- **Options**: `startup`, `scaleup`, `sme`, `corporate`, `public_sector`, `social_sector`, `agency`, `consulting`, `hospitality`, `retail`
 - **Default**: `scaleup`
 - **Effect**: Influences tone and content style
-- **Impact on Temperature**: Startup (+0.05), Public Sector (-0.05)
+- **Impact on Temperature**: Startup/Hospitality/Retail (+0.05), Public Sector/Social Sector (-0.05)
 
 #### Industry
-- **Options**: `generic`, `finance`, `healthcare`, `public_it`, `ai_startup`, `ecommerce`, `manufacturing`
+- **Options**: `generic`, `finance`, `healthcare`, `social_care`, `public_it`, `ai_startup`, `ecommerce`, `manufacturing`
 - **Default**: `generic`
 - **Effect**: 
   - Sets industry-specific benefit defaults
@@ -100,6 +100,7 @@ All settings are available in the sidebar under "⚙️ Generation Settings".
 - **Auto-adjustments**:
   - `public_it` → sets company_type to `public_sector`
   - `ai_startup` → sets company_type to `startup`
+  - `social_care` → warmer, more empathetic tone via green+yellow style routing (no temperature penalty)
 
 #### Seniority Level
 - **Options**: Not specified, `intern`, `junior`, `mid`, `senior`, `lead`, `principal`

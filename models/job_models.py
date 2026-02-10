@@ -134,16 +134,21 @@ class JobGenerationConfig(BaseModel):
     company_type: Literal[
         "startup",
         "scaleup",
+        "sme",
         "corporate",
         "public_sector",
+        "social_sector",
         "agency",
         "consulting",
+        "hospitality",
+        "retail",
     ] = "scaleup"
 
     industry: Literal[
         "generic",
         "finance",
         "healthcare",
+        "social_care",
         "public_it",
         "ai_startup",
         "ecommerce",
@@ -176,9 +181,9 @@ class JobGenerationConfig(BaseModel):
             "casual": 0.55,
         }[self.formality]
 
-        if self.company_type == "startup":
+        if self.company_type in ("startup", "hospitality", "retail"):
             base += 0.05
-        elif self.company_type == "public_sector":
+        elif self.company_type in ("public_sector", "social_sector"):
             base -= 0.05
 
         if self.seniority_label in ["senior", "lead", "principal"]:
@@ -195,12 +200,19 @@ class JobGenerationConfig(BaseModel):
         return base
 
     def with_industry_defaults(self) -> "JobGenerationConfig":
+        """
+        Apply industry-specific defaults.
+        
+        Note: Default benefit keywords use Schweizer Schriftdeutsch / CH vocabulary
+        (e.g. 'berufliche Vorsorge' instead of 'betriebliche Altersvorsorge',
+         'Ferien' instead of 'Urlaub').
+        """
         cfg = self.model_copy(deep=True)
 
         if cfg.industry == "finance":
             if not cfg.benefit_keywords:
                 cfg.benefit_keywords = [
-                    "betriebliche Altersvorsorge",
+                    "berufliche Vorsorge (BVG)",
                     "Weiterbildung im Bereich Finanzmarkt",
                     "Bonusregelung",
                     "hybrides Arbeiten",
@@ -212,6 +224,15 @@ class JobGenerationConfig(BaseModel):
                     "Work Life Balance",
                     "betriebliche Gesundheitsförderung",
                     "sicherer Arbeitsplatz",
+                ]
+
+        if cfg.industry == "social_care":
+            if not cfg.benefit_keywords:
+                cfg.benefit_keywords = [
+                    "Supervision und kollegiale Fallberatung",
+                    "Weiterbildungsmöglichkeiten im Sozialbereich",
+                    "Work-Life-Balance und familienfreundliche Arbeitszeiten",
+                    "betriebliche Gesundheitsförderung",
                 ]
 
         if cfg.industry == "public_it":
@@ -244,7 +265,7 @@ class JobGenerationConfig(BaseModel):
             cfg.benefit_keywords = [
                 "attraktive Schichtmodelle",
                 "Zuschuss zu Fahrtkosten",
-                "betriebliche Altersvorsorge",
+                "berufliche Vorsorge (BVG)",
             ]
 
         return cfg

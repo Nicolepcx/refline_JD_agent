@@ -8,7 +8,7 @@ from models.job_models import JobGenerationConfig, JobBody, SkillItem
 from generators.job_generator import render_job_body
 from ruler.ruler_utils import generate_best_job_body_with_ruler
 from llm_service import call_llm
-from utils import job_body_to_dict, dict_to_job_body
+from utils import job_body_to_dict, dict_to_job_body, strip_bullet_prefix
 from logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -222,9 +222,9 @@ def generate_job_section(
         job_body = render_job_body(job_title, config)
         section_map = {
             "description": job_body.job_description,
-            "requirements": "\n".join(job_body.requirements),
-            "duties": "\n".join(job_body.duties),
-            "benefits": "\n".join(job_body.benefits),
+            "requirements": "\n".join(strip_bullet_prefix(r) for r in job_body.requirements),
+            "duties": "\n".join(strip_bullet_prefix(d) for d in job_body.duties),
+            "benefits": "\n".join(strip_bullet_prefix(b) for b in job_body.benefits),
             "footer": job_body.summary or "",
         }
         return section_map.get(section, current_value)

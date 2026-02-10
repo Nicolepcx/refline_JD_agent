@@ -14,6 +14,11 @@ from generators.job_generator import generate_job_body_candidate_async
 from ruler.ruler_utils import jd_candidate_to_trajectory, score_group_with_fallback
 from services.style_router import route_style, explain_style_routing
 from services.style_retriever import retrieve_style_kit
+from services.swiss_german import (
+    enforce_swiss_german,
+    enforce_swiss_german_on_list,
+    get_ch_prompt_block,
+)
 from logging_config import get_logger
 import art
 from art.rewards import ruler_score_group
@@ -140,7 +145,7 @@ async def node_style_router(state: JobState) -> Dict:
     except Exception:
         pass  # Vector store not available — defaults will be used
 
-    kit = retrieve_style_kit(profile, lang=lang, vector_store=vector_store)
+    kit = retrieve_style_kit(profile, lang=lang, vector_store=vector_store, formality=cfg.formality)
 
     # 3. Persist profile JSON for downstream / UI consumption
     style_profile_json = profile.model_dump_json(indent=2, ensure_ascii=False)
@@ -437,8 +442,10 @@ async def node_style_expert(
                     "Return the refined JobBody instance."
                 )
             else:
+                ch_block = get_ch_prompt_block(cfg.formality)
                 refine_prompt = (
                     "Du verfeinerst eine Stellenbeschreibung basierend auf Feedback und Qualitätsanalyse.\n"
+                    f"{ch_block}\n"
                     f"{refinement_instructions}\n"
                     f"{ruler_info}\n\n"
                     f"Aktuelle Stellenbeschreibung:\n{candidate_json}\n\n"
@@ -448,12 +455,22 @@ async def node_style_expert(
                     "- Klarheit, Professionalität und Ausrichtung zu verbessern\n"
                     "- Ausrichtung am Unternehmensstil sicherzustellen (falls Kontext vorhanden)\n"
                     "- Alle wesentlichen Informationen beizubehalten\n"
+                    "- Schweizer Schriftdeutsch verwenden (kein ß, CH-Wortschatz)\n"
                     "Gib die verfeinerte JobBody-Instanz zurück."
                 )
 
             try:
                 # Use ainvoke for true async execution
-                return await style_llm.ainvoke(refine_prompt)
+                refined = await style_llm.ainvoke(refine_prompt)
+                # Enforce Schweizer Schriftdeutsch on refined output
+                if lang == "de":
+                    refined.job_description = enforce_swiss_german(refined.job_description)
+                    refined.requirements = enforce_swiss_german_on_list(refined.requirements)
+                    refined.benefits = enforce_swiss_german_on_list(refined.benefits)
+                    refined.duties = enforce_swiss_german_on_list(refined.duties)
+                    if refined.summary:
+                        refined.summary = enforce_swiss_german(refined.summary)
+                return refined
             except Exception as e:
                 logger.warning(f"Refinement failed for candidate {idx}: {e}", exc_info=True)
                 return candidate

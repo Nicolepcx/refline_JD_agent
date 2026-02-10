@@ -31,6 +31,7 @@ the **secondary profile**.
 |----------------|--------|-----------|---------|----------|-----------|
 | `finance`       | —      | —         | **0.40** | 0.20    | Regulated, credibility-driven, evidence matters |
 | `healthcare`    | —      | —         | 0.20    | **0.40** | Trust, safety, patient care, ethics-first |
+| `social_care`   | —      | **0.20** | —       | **0.40** | Warmth, empathy, team belonging, people-oriented |
 | `public_it`     | —      | —         | **0.30** | **0.30** | Structure + stability, public accountability |
 | `ai_startup`    | 0.20   | **0.30** | —       | —        | Innovation, speed, creativity, disruption |
 | `ecommerce`     | **0.30** | 0.20   | —       | —        | Growth-driven, competitive, conversion focus |
@@ -45,10 +46,14 @@ the **secondary profile**.
 |----------------|--------|-----------|---------|----------|-----------|
 | `startup`       | 0.20   | **0.30** | —       | —        | Move fast, creative culture, flat hierarchy |
 | `scaleup`       | **0.20** | —       | **0.20** | —       | Growth + structure balance |
+| `sme`           | —      | —         | **0.20** | **0.20** | Pragmatic, close-knit teams, balanced culture |
 | `corporate`     | —      | —         | **0.30** | 0.20    | Established processes, brand reputation |
 | `public_sector` | —      | —         | **0.30** | **0.30** | Compliance, public trust, stability |
+| `social_sector` | —      | —         | 0.20    | **0.40** | Mission-driven, trust, belonging, purpose |
 | `agency`        | 0.20   | **0.30** | —       | —        | Client variety, creative output, fast delivery |
 | `consulting`    | **0.30** | —       | 0.20    | —        | Results-driven, expert positioning |
+| `hospitality`   | —      | **0.30** | —       | 0.20     | Team spirit, approachable, people-first |
+| `retail`        | **0.20** | **0.20** | —       | —       | Dynamic, customer-facing, action-oriented |
 
 ---
 

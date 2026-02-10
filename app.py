@@ -47,6 +47,7 @@ from ui.layout import (
 from ui.config_panel import render_config_sidebar
 from ui.feedback_panel import render_feedback_buttons, render_history_panel
 from ui.company_scraper_panel import render_company_scraper_panel
+from ui.eval_panel import render_eval_panel
 from database.models import get_db_manager
 
 # Page configuration
@@ -217,6 +218,9 @@ render_config_sidebar()
 
 # Render company scraper panel in sidebar
 render_company_scraper_panel()
+
+# Render eval harness panel in sidebar
+render_eval_panel()
 
 # Render history panel in sidebar
 render_history_panel()

@@ -3,7 +3,7 @@ Helper functions to convert between session state and JobGenerationConfig.
 """
 import streamlit as st
 from models.job_models import JobGenerationConfig, SkillItem
-from utils import job_body_to_dict
+from utils import job_body_to_dict, strip_bullet_prefix
 
 
 def get_job_config_from_session() -> JobGenerationConfig:
@@ -57,23 +57,29 @@ def update_session_from_job_body(job_body_dict: dict):
         st.session_state["description"] = str(value) if value is not None else ""
     if "requirements" in job_body_dict:
         value = job_body_dict["requirements"]
-        # Handle both string and list formats
+        # Handle both string and list formats; strip bullet markers to avoid doubling
         if isinstance(value, list):
-            st.session_state["requirements"] = "\n".join(str(item) for item in value)
+            st.session_state["requirements"] = "\n".join(
+                strip_bullet_prefix(str(item)) for item in value
+            )
         else:
-            st.session_state["requirements"] = str(value) if value is not None else ""
+            st.session_state["requirements"] = _strip_bullets_from_text(value)
     if "duties" in job_body_dict:
         value = job_body_dict["duties"]
         if isinstance(value, list):
-            st.session_state["duties"] = "\n".join(str(item) for item in value)
+            st.session_state["duties"] = "\n".join(
+                strip_bullet_prefix(str(item)) for item in value
+            )
         else:
-            st.session_state["duties"] = str(value) if value is not None else ""
+            st.session_state["duties"] = _strip_bullets_from_text(value)
     if "benefits" in job_body_dict:
         value = job_body_dict["benefits"]
         if isinstance(value, list):
-            st.session_state["benefits"] = "\n".join(str(item) for item in value)
+            st.session_state["benefits"] = "\n".join(
+                strip_bullet_prefix(str(item)) for item in value
+            )
         else:
-            st.session_state["benefits"] = str(value) if value is not None else ""
+            st.session_state["benefits"] = _strip_bullets_from_text(value)
     if "footer" in job_body_dict:
         value = job_body_dict["footer"]
         st.session_state["footer"] = str(value) if value is not None else ""
@@ -85,6 +91,16 @@ def update_session_from_job_body(job_body_dict: dict):
         st.session_state["job_intro"] = preserved_intro
     if preserved_caption:
         st.session_state["caption"] = preserved_caption
+
+
+def _strip_bullets_from_text(value) -> str:
+    """Strip bullet markers from each line of a multi-line string."""
+    if value is None:
+        return ""
+    text = str(value)
+    lines = text.splitlines()
+    cleaned = [strip_bullet_prefix(line) for line in lines]
+    return "\n".join(cleaned)
 
 
 def _parse_skills_from_session() -> list[SkillItem]:
@@ -128,9 +144,7 @@ def _parse_duty_keywords_from_session() -> list[str]:
     
     keywords = []
     for line in duties_text.strip().splitlines():
-        line = line.strip()
-        # Strip common bullet markers
-        line = line.lstrip("•-*– ").strip()
+        line = strip_bullet_prefix(line)
         if line and len(line) > 5:
             keywords.append(line)
     

@@ -2,6 +2,42 @@ from typing import List, Optional
 import asyncio
 from models.job_models import JobBody, JobGenerationConfig, StyleKit
 from llm_service import get_base_llm
+from services.swiss_german import (
+    enforce_swiss_german,
+    enforce_swiss_german_on_list,
+    get_ch_prompt_block,
+    check_pronoun_consistency,
+    check_pronoun_consistency_on_list,
+)
+
+
+###############################################################################
+# ── Sentence-start variety instructions (AGENTS.md Rule 5) ──────────────────
+###############################################################################
+
+_VARIETY_BLOCK_EN = (
+    "\n## Sentence-Start Variety (MANDATORY)\n"
+    "Every bullet-point list (duties, requirements, benefits) MUST vary how sentences begin.\n"
+    "NEVER start more than 2 bullets the same way (e.g. 'You will…', 'Be responsible for…').\n"
+    "Mix these openings across each list:\n"
+    "- Lead with the topic area (e.g. 'Cloud infrastructure: design and maintain…')\n"
+    "- Start with an action verb (e.g. 'Design scalable APIs…')\n"
+    "- Open with context (e.g. 'In close collaboration with the data team, …')\n"
+    "- Use a noun phrase (e.g. 'Ownership of the CI/CD pipeline…')\n"
+    "- Vary the subject: you / we / the team / this role\n"
+)
+
+_VARIETY_BLOCK_DE = (
+    "\n## Abwechslung bei Satzanfängen (OBLIGATORISCH)\n"
+    "Jede Aufzählung (Aufgaben, Anforderungen, Benefits) MUSS unterschiedliche Satzanfänge verwenden.\n"
+    "NIEMALS mehr als 2 Punkte gleich beginnen (z.B. immer «Sie …» oder «Du …»).\n"
+    "Verwende mindestens 3 dieser Varianten pro Liste:\n"
+    "- Mit dem Themenbereich beginnen (z.B. «Cloud-Infrastruktur: Entwurf und Wartung…»)\n"
+    "- Mit einem Verb starten (z.B. «Entwirf skalierbare APIs…» oder «Skalierbare APIs entwerfen…»)\n"
+    "- Kontextbezogener Einstieg (z.B. «In enger Zusammenarbeit mit dem Data-Team…»)\n"
+    "- Substantivische Wendung (z.B. «Verantwortung für die CI/CD-Pipeline…»)\n"
+    "- Subjekt wechseln: Sie/Du / Wir / Das Team / Diese Rolle\n"
+)
 
 
 def explain_temperature(cfg: JobGenerationConfig) -> str:
@@ -13,12 +49,12 @@ def explain_temperature(cfg: JobGenerationConfig) -> str:
     parts.append(f"Base from formality='{cfg.formality}': {base:.2f}")
 
     # company type
-    if cfg.company_type == "startup":
+    if cfg.company_type in ("startup", "hospitality", "retail"):
         base += 0.05
-        parts.append("Company type 'startup' => +0.05")
-    elif cfg.company_type == "public_sector":
+        parts.append(f"Company type '{cfg.company_type}' => +0.05")
+    elif cfg.company_type in ("public_sector", "social_sector"):
         base -= 0.05
-        parts.append("Company type 'public_sector' => -0.05")
+        parts.append(f"Company type '{cfg.company_type}' => -0.05")
     else:
         parts.append(f"Company type '{cfg.company_type}' => +0.00")
 
@@ -236,7 +272,7 @@ def render_job_body(
         temperature=temp
     )
 
-    # tone line
+    # tone line (German: includes explicit Sie/du pronoun rule)
     if lang == "en":
         tone_map = {
             "casual": "Use a friendly modern tone, but stay professional.",
@@ -245,9 +281,24 @@ def render_job_body(
         }
     else:
         tone_map = {
-            "casual": "Verwende einen freundlichen modernen, aber professionellen Ton.",
-            "neutral": "Verwende einen klaren sachlich professionellen Ton.",
-            "formal": "Verwende einen formellen, eher konservativen Ton.",
+            "casual": (
+                "Verwende einen freundlichen modernen, aber professionellen Ton. "
+                "WICHTIG: Verwende durchgehend die «du»-Anrede (duzen). "
+                "Beispiel: «Du arbeitest…», «Dein Team…», «Wir bieten dir…». "
+                "Verwende NIEMALS «Sie» oder «Ihnen» als Höflichkeitsform."
+            ),
+            "neutral": (
+                "Verwende einen klaren sachlich professionellen Ton. "
+                "WICHTIG: Verwende durchgehend die «Sie»-Anrede (siezen). "
+                "Beispiel: «Sie arbeiten…», «Ihr Team…», «Wir bieten Ihnen…». "
+                "Verwende NIEMALS «du» oder «dir» als Anrede."
+            ),
+            "formal": (
+                "Verwende einen formellen, eher konservativen Ton. "
+                "WICHTIG: Verwende durchgehend die «Sie»-Anrede (siezen). "
+                "Beispiel: «Sie arbeiten…», «Ihr Team…», «Wir bieten Ihnen…». "
+                "Verwende NIEMALS «du» oder «dir» als Anrede."
+            ),
         }
     tone_line = tone_map[cfg.formality]
 
@@ -256,19 +307,27 @@ def render_job_body(
         type_map = {
             "startup": "The company is a young startup with a fast paced environment.",
             "scaleup": "The company is a growing scaleup with an established product.",
+            "sme": "The company is a small or medium-sized enterprise (SME) with close-knit teams and a pragmatic work culture.",
             "corporate": "The company is a larger established company.",
             "public_sector": "The organization operates in the public sector.",
+            "social_sector": "The organization is a non-profit or social sector entity with a purpose-driven mission.",
             "agency": "The company is a digital agency working for multiple clients.",
             "consulting": "The company is a consulting firm that delivers client projects.",
+            "hospitality": "The company operates in the hospitality sector (e.g. restaurant franchise, gastronomy) with a hands-on, team-oriented culture.",
+            "retail": "The company operates in retail with a customer-focused, dynamic work environment.",
         }
     else:
         type_map = {
             "startup": "Das Unternehmen ist ein junges Startup mit dynamischem Umfeld.",
             "scaleup": "Das Unternehmen ist ein wachsendes Scaleup mit etabliertem Produkt.",
-            "corporate": "Das Unternehmen ist ein größeres etabliertes Unternehmen.",
+            "sme": "Das Unternehmen ist ein KMU mit eingespielten Teams und einer pragmatischen Arbeitskultur.",
+            "corporate": "Das Unternehmen ist ein grösseres etabliertes Unternehmen.",
             "public_sector": "Die Organisation ist im öffentlichen Sektor tätig.",
+            "social_sector": "Die Organisation ist eine gemeinnützige Einrichtung oder Stiftung mit einer sinnstiftenden Mission.",
             "agency": "Das Unternehmen ist eine Agentur mit verschiedenen Kundenprojekten.",
             "consulting": "Das Unternehmen ist ein Beratungsunternehmen mit vielfältigen Kundenprojekten.",
+            "hospitality": "Das Unternehmen ist in der Gastronomie tätig (z.B. Restaurantkette) mit einer praxisnahen, teamorientierten Kultur.",
+            "retail": "Das Unternehmen ist im Detailhandel tätig mit einem kundenorientierten, dynamischen Arbeitsumfeld.",
         }
     company_line = type_map[cfg.company_type]
 
@@ -340,7 +399,7 @@ def render_job_body(
                 "Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz. "
                 "Zum Beispiel: 'Remote Work Schweiz' sollte zu 'Remote Work in der Schweiz' oder 'Remote Work Möglichkeiten in der Schweiz' werden. "
                 "Jeder Benefit muss ein vollständiger Satz sein, nicht nur eine Phrase. "
-                "Füge KEINE weiteren Benefits hinzu außer diesen Stichwörtern. "
+                "Füge KEINE weiteren Benefits hinzu ausser diesen Stichwörtern. "
                 "Erstelle genau einen Bullet Point pro angegebenem Stichwort."
             ).format(benefit_tags=benefit_tags)
         else:
@@ -385,6 +444,11 @@ def render_job_body(
     if style_kit is not None:
         style_section = "\n\n" + style_kit.to_prompt_block(lang) + "\n\n"
     
+    # Schweizer Schriftdeutsch prompt block (injected for all DE generation)
+    ch_block = ""
+    if lang == "de":
+        ch_block = "\n" + get_ch_prompt_block(cfg.formality) + "\n"
+
     # prompt
     if lang == "en":
         prompt = (
@@ -396,9 +460,11 @@ def render_job_body(
             f"{benefits_line}\n"
             f"{duties_line}\n"
             f"{style_section}"
+            f"{_VARIETY_BLOCK_EN}\n"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
             "Produce a JobBody instance in English.\n"
+            "IMPORTANT: Do NOT include bullet markers (-, •, *, –) at the start of list items. Provide plain text only.\n"
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
             "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
@@ -408,6 +474,7 @@ def render_job_body(
     else:
         prompt = (
             "Du bist eine erfahrene HR Texterin für eine Recruiting Plattform.\n"
+            f"{ch_block}"
             f"{tone_line}\n"
             f"{company_line}\n"
             f"{seniority_line}\n"
@@ -415,9 +482,11 @@ def render_job_body(
             f"{benefits_line}\n"
             f"{duties_line}\n"
             f"{style_section}"
+            f"{_VARIETY_BLOCK_DE}\n"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
-            "Erstelle eine JobBody Struktur auf Deutsch.\n"
+            "Erstelle eine JobBody Struktur auf Schweizer Schriftdeutsch.\n"
+            "WICHTIG: Verwende KEINE Aufzählungszeichen (-, •, *, –) am Anfang der Listeneinträge. Gib nur den reinen Text an.\n"
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
             "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
@@ -426,6 +495,23 @@ def render_job_body(
         )
 
     payload: JobBody = writer_model.invoke(prompt)
+
+    # ── Schweizer Schriftdeutsch post-processing (ß→ss + CH vocabulary) ──
+    if lang == "de":
+        payload.job_description = enforce_swiss_german(payload.job_description)
+        payload.requirements = enforce_swiss_german_on_list(payload.requirements)
+        payload.benefits = enforce_swiss_german_on_list(payload.benefits)
+        payload.duties = enforce_swiss_german_on_list(payload.duties)
+        if payload.summary:
+            payload.summary = enforce_swiss_german(payload.summary)
+
+        # ── Pronoun consistency check (Sie vs du) ──
+        _all = " ".join(
+            [payload.job_description]
+            + payload.requirements + payload.benefits + payload.duties
+            + ([payload.summary] if payload.summary else [])
+        )
+        check_pronoun_consistency(_all, cfg.formality)
     
     # Post-process duties: if we had pre-filled duties (tier 1 or 2), enforce them
     if duty_bullets and duty_source in ("user", "category"):
@@ -529,7 +615,7 @@ async def render_job_body_async(
         temperature=temp
     )
 
-    # tone line
+    # tone line (German: includes explicit Sie/du pronoun rule)
     if lang == "en":
         tone_map = {
             "casual": "Use a friendly modern tone, but stay professional.",
@@ -538,9 +624,24 @@ async def render_job_body_async(
         }
     else:
         tone_map = {
-            "casual": "Verwende einen freundlichen modernen, aber professionellen Ton.",
-            "neutral": "Verwende einen klaren sachlich professionellen Ton.",
-            "formal": "Verwende einen formellen, eher konservativen Ton.",
+            "casual": (
+                "Verwende einen freundlichen modernen, aber professionellen Ton. "
+                "WICHTIG: Verwende durchgehend die «du»-Anrede (duzen). "
+                "Beispiel: «Du arbeitest…», «Dein Team…», «Wir bieten dir…». "
+                "Verwende NIEMALS «Sie» oder «Ihnen» als Höflichkeitsform."
+            ),
+            "neutral": (
+                "Verwende einen klaren sachlich professionellen Ton. "
+                "WICHTIG: Verwende durchgehend die «Sie»-Anrede (siezen). "
+                "Beispiel: «Sie arbeiten…», «Ihr Team…», «Wir bieten Ihnen…». "
+                "Verwende NIEMALS «du» oder «dir» als Anrede."
+            ),
+            "formal": (
+                "Verwende einen formellen, eher konservativen Ton. "
+                "WICHTIG: Verwende durchgehend die «Sie»-Anrede (siezen). "
+                "Beispiel: «Sie arbeiten…», «Ihr Team…», «Wir bieten Ihnen…». "
+                "Verwende NIEMALS «du» oder «dir» als Anrede."
+            ),
         }
     tone_line = tone_map[cfg.formality]
 
@@ -549,19 +650,27 @@ async def render_job_body_async(
         type_map = {
             "startup": "The company is a young startup with a fast paced environment.",
             "scaleup": "The company is a growing scaleup with an established product.",
+            "sme": "The company is a small or medium-sized enterprise (SME) with close-knit teams and a pragmatic work culture.",
             "corporate": "The company is a larger established company.",
             "public_sector": "The organization operates in the public sector.",
+            "social_sector": "The organization is a non-profit or social sector entity with a purpose-driven mission.",
             "agency": "The company is a digital agency working for multiple clients.",
             "consulting": "The company is a consulting firm that delivers client projects.",
+            "hospitality": "The company operates in the hospitality sector (e.g. restaurant franchise, gastronomy) with a hands-on, team-oriented culture.",
+            "retail": "The company operates in retail with a customer-focused, dynamic work environment.",
         }
     else:
         type_map = {
             "startup": "Das Unternehmen ist ein junges Startup mit dynamischem Umfeld.",
             "scaleup": "Das Unternehmen ist ein wachsendes Scaleup mit etabliertem Produkt.",
-            "corporate": "Das Unternehmen ist ein größeres etabliertes Unternehmen.",
+            "sme": "Das Unternehmen ist ein KMU mit eingespielten Teams und einer pragmatischen Arbeitskultur.",
+            "corporate": "Das Unternehmen ist ein grösseres etabliertes Unternehmen.",
             "public_sector": "Die Organisation ist im öffentlichen Sektor tätig.",
+            "social_sector": "Die Organisation ist eine gemeinnützige Einrichtung oder Stiftung mit einer sinnstiftenden Mission.",
             "agency": "Das Unternehmen ist eine Agentur mit verschiedenen Kundenprojekten.",
             "consulting": "Das Unternehmen ist ein Beratungsunternehmen mit vielfältigen Kundenprojekten.",
+            "hospitality": "Das Unternehmen ist in der Gastronomie tätig (z.B. Restaurantkette) mit einer praxisnahen, teamorientierten Kultur.",
+            "retail": "Das Unternehmen ist im Detailhandel tätig mit einem kundenorientierten, dynamischen Arbeitsumfeld.",
         }
     company_line = type_map[cfg.company_type]
 
@@ -633,7 +742,7 @@ async def render_job_body_async(
                 "Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz. "
                 "Zum Beispiel: 'Remote Work Schweiz' sollte zu 'Remote Work in der Schweiz' oder 'Remote Work Möglichkeiten in der Schweiz' werden. "
                 "Jeder Benefit muss ein vollständiger Satz sein, nicht nur eine Phrase. "
-                "Füge KEINE weiteren Benefits hinzu außer diesen Stichwörtern. "
+                "Füge KEINE weiteren Benefits hinzu ausser diesen Stichwörtern. "
                 "Erstelle genau einen Bullet Point pro angegebenem Stichwort."
             ).format(benefit_tags=benefit_tags)
         else:
@@ -678,6 +787,11 @@ async def render_job_body_async(
     if style_kit is not None:
         style_section = "\n\n" + style_kit.to_prompt_block(lang) + "\n\n"
     
+    # Schweizer Schriftdeutsch prompt block (injected for all DE generation)
+    ch_block = ""
+    if lang == "de":
+        ch_block = "\n" + get_ch_prompt_block(cfg.formality) + "\n"
+
     # prompt
     if lang == "en":
         prompt = (
@@ -689,9 +803,11 @@ async def render_job_body_async(
             f"{benefits_line}\n"
             f"{duties_line}\n"
             f"{style_section}"
+            f"{_VARIETY_BLOCK_EN}\n"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
             "Produce a JobBody instance in English.\n"
+            "IMPORTANT: Do NOT include bullet markers (-, •, *, –) at the start of list items. Provide plain text only.\n"
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
             "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
@@ -701,6 +817,7 @@ async def render_job_body_async(
     else:
         prompt = (
             "Du bist eine erfahrene HR Texterin für eine Recruiting Plattform.\n"
+            f"{ch_block}"
             f"{tone_line}\n"
             f"{company_line}\n"
             f"{seniority_line}\n"
@@ -708,9 +825,11 @@ async def render_job_body_async(
             f"{benefits_line}\n"
             f"{duties_line}\n"
             f"{style_section}"
+            f"{_VARIETY_BLOCK_DE}\n"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
-            "Erstelle eine JobBody Struktur auf Deutsch.\n"
+            "Erstelle eine JobBody Struktur auf Schweizer Schriftdeutsch.\n"
+            "WICHTIG: Verwende KEINE Aufzählungszeichen (-, •, *, –) am Anfang der Listeneinträge. Gib nur den reinen Text an.\n"
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
             "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
@@ -720,6 +839,23 @@ async def render_job_body_async(
 
     # Use ainvoke for true async execution
     payload: JobBody = await writer_model.ainvoke(prompt)
+
+    # ── Schweizer Schriftdeutsch post-processing (ß→ss + CH vocabulary) ──
+    if lang == "de":
+        payload.job_description = enforce_swiss_german(payload.job_description)
+        payload.requirements = enforce_swiss_german_on_list(payload.requirements)
+        payload.benefits = enforce_swiss_german_on_list(payload.benefits)
+        payload.duties = enforce_swiss_german_on_list(payload.duties)
+        if payload.summary:
+            payload.summary = enforce_swiss_german(payload.summary)
+
+        # ── Pronoun consistency check (Sie vs du) ──
+        _all = " ".join(
+            [payload.job_description]
+            + payload.requirements + payload.benefits + payload.duties
+            + ([payload.summary] if payload.summary else [])
+        )
+        check_pronoun_consistency(_all, cfg.formality)
     
     # Post-process duties: if we had pre-filled duties (tier 1 or 2), enforce them
     if duty_bullets and duty_source in ("user", "category"):

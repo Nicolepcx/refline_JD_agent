@@ -267,7 +267,7 @@ def _extract_satzstruktur_pdf(path: Path) -> list[StyleChunk]:
         content=(
             "Reaktive Satzstruktur: Lange, verschachtelte Sätze. "
             "Die Person spricht, als würde sie von der Welt kontrolliert, "
-            "als würden ihr die Dinge zustoßen, sie glaubt an Glück oder Schicksal. "
+            "als würden ihr die Dinge zustossen, sie glaubt an Glück oder Schicksal. "
             "Häufige Erwähnung von nachdenken, analysieren, verstehen, warten "
             "oder prinzipiellen Fragen. Konditionalformen: würde, könnte, sollte."
         ),
@@ -283,7 +283,7 @@ def _extract_satzstruktur_pdf(path: Path) -> list[StyleChunk]:
     chunks.append(StyleChunk(
         content=(
             "Objektbezogene Satzstruktur: Spricht über Prozesse, Systeme, Werkzeuge, "
-            "Ideen, Aufgaben, Ziele. Wird Menschen nicht oft erwähnen, außer in Form von "
+            "Ideen, Aufgaben, Ziele. Wird Menschen nicht oft erwähnen, ausser in Form von "
             "unpersönlichen Pronomen wie 'sie' oder 'man'. "
             "Personen werden zu Objekten oder Bestandteilen von Prozessen. "
             "Sprechen Sie über Prozesse, Systeme, Werkzeuge, Ideen, Aufgaben und Ziele. "
@@ -394,7 +394,7 @@ def _extract_motivkompass_uebersicht(path: Path) -> list[StyleChunk]:
             "Gelb (Entertainer) – Marketing-Ansatz: Lockeres Marketing. "
             "Verknappung mit lockerer und direkter Ansprache. "
             "Emoticons (Social Media) nutzen. Viele Farben und Bilder. "
-            "Mit einer Prise Humor. Freiheit, Spaß/Freude, Kreativität. "
+            "Mit einer Prise Humor. Freiheit, Spass/Freude, Kreativität. "
             "Individualität, Gesehen werden, Was Besonderes sein. "
             "Auswahl überlassen. Fokus auf Möglichkeiten. Schnelligkeit."
         ),
@@ -618,7 +618,7 @@ def _extract_allgemeine_tipps(path: Path) -> list[StyleChunk]:
     chunks.append(StyleChunk(
         content=(
             "Gelb (proaktiv + Personenbezug): 'Wie kommt es bei anderen an?' – "
-            "Neue Trends, 'Mittelpunkt'. Maßgeschneiderte Lösung. "
+            "Neue Trends, 'Mittelpunkt'. Massgeschneiderte Lösung. "
             "Kurze Präsentationen / Small Talk. Fokus Möglichkeiten."
         ),
         profile_color="yellow",

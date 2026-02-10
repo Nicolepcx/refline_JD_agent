@@ -117,21 +117,37 @@ def render_config_sidebar():
         )
         
         # Company Type
+        _company_types = [
+            "startup", "scaleup", "sme", "corporate", "public_sector",
+            "social_sector", "agency", "consulting", "hospitality", "retail",
+        ]
         st.selectbox(
             "Company Type",
-            options=["startup", "scaleup", "corporate", "public_sector", "agency", "consulting"],
-            index=["startup", "scaleup", "corporate", "public_sector", "agency", "consulting"].index(
+            options=_company_types,
+            index=_company_types.index(
                 st.session_state.get("config_company_type", "scaleup")
             ),
             key="config_company_type",
+            format_func=lambda x: {
+                "startup": "Startup",
+                "scaleup": "Scaleup",
+                "sme": "SME / KMU",
+                "corporate": "Corporate",
+                "public_sector": "Public Sector",
+                "social_sector": "Social Sector / Stiftung",
+                "agency": "Agency",
+                "consulting": "Consulting",
+                "hospitality": "Hospitality / Gastronomie",
+                "retail": "Retail / Detailhandel",
+            }.get(x, x),
             help="Type of company/organization"
         )
         
         # Industry
         st.selectbox(
             "Industry",
-            options=["generic", "finance", "healthcare", "public_it", "ai_startup", "ecommerce", "manufacturing"],
-            index=["generic", "finance", "healthcare", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
+            options=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"],
+            index=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
                 st.session_state.get("config_industry", "generic")
             ),
             key="config_industry",
@@ -258,19 +274,35 @@ def render_config_expander():
             )
         
         with col2:
+            _ct = [
+                "startup", "scaleup", "sme", "corporate", "public_sector",
+                "social_sector", "agency", "consulting", "hospitality", "retail",
+            ]
             st.selectbox(
                 "Company Type",
-                options=["startup", "scaleup", "corporate", "public_sector", "agency", "consulting"],
-                index=["startup", "scaleup", "corporate", "public_sector", "agency", "consulting"].index(
+                options=_ct,
+                index=_ct.index(
                     st.session_state.get("config_company_type", "scaleup")
                 ),
                 key="config_company_type",
+                format_func=lambda x: {
+                    "startup": "Startup",
+                    "scaleup": "Scaleup",
+                    "sme": "SME / KMU",
+                    "corporate": "Corporate",
+                    "public_sector": "Public Sector",
+                    "social_sector": "Social Sector / Stiftung",
+                    "agency": "Agency",
+                    "consulting": "Consulting",
+                    "hospitality": "Hospitality / Gastronomie",
+                    "retail": "Retail / Detailhandel",
+                }.get(x, x),
             )
             
             st.selectbox(
                 "Industry",
-                options=["generic", "finance", "healthcare", "public_it", "ai_startup", "ecommerce", "manufacturing"],
-                index=["generic", "finance", "healthcare", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
+                options=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"],
+                index=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
                     st.session_state.get("config_industry", "generic")
                 ),
                 key="config_industry",

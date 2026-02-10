@@ -25,6 +25,7 @@ _COLOR_SIGNALS: dict[str, dict[str, float]] = {
     # ── Industry signals ──
     "finance":        {"blue": 0.4, "green": 0.2},
     "healthcare":     {"green": 0.4, "blue": 0.2},
+    "social_care":    {"green": 0.4, "yellow": 0.2},
     "public_it":      {"blue": 0.3, "green": 0.3},
     "ai_startup":     {"yellow": 0.3, "red": 0.2},
     "ecommerce":      {"red": 0.3, "yellow": 0.2},
@@ -34,10 +35,14 @@ _COLOR_SIGNALS: dict[str, dict[str, float]] = {
     # ── Company type signals ──
     "startup":        {"yellow": 0.3, "red": 0.2},
     "scaleup":        {"red": 0.2, "blue": 0.2},
+    "sme":            {"blue": 0.2, "green": 0.2},
     "corporate":      {"blue": 0.3, "green": 0.2},
     "public_sector":  {"blue": 0.3, "green": 0.3},
+    "social_sector":  {"green": 0.4, "blue": 0.2},
     "agency":         {"yellow": 0.3, "red": 0.2},
     "consulting":     {"red": 0.3, "blue": 0.2},
+    "hospitality":    {"yellow": 0.3, "green": 0.2},
+    "retail":         {"yellow": 0.2, "red": 0.2},
 
     # ── Formality signals ──
     "casual":         {"yellow": 0.3, "red": 0.1},

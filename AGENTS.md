@@ -112,6 +112,30 @@ When constraints from different sources conflict, resolve in this order:
 Example: if the persuasion profile says "use pressure language" but legal
 constraints say "no pressure", legal wins.
 
+### Rule 5: Sentence-start variety in bullet lists
+
+Every bullet-point list (duties, requirements, benefits) MUST vary sentence
+openings.  Repetitive patterns destroy readability and feel templated.
+
+**Banned patterns:**
+
+| Language | Anti-pattern | Why it fails |
+|----------|-------------|--------------|
+| DE | Every bullet starts with *«Sie …»* or *«Du …»* | Monotone, reads like a checklist |
+| EN | Every bullet starts with *"As a [Role], you will…"* | Generic, no personality |
+| EN | More than 2 bullets with *"be responsible for…"* | Passive, vague |
+| DE | More than 2 bullets with *«…verantwortlich für»* | Same problem in German |
+
+**Required variety techniques** (use at least 3 of these across any list of 5+ items):
+
+1. **Lead with the object / topic area** — *"Cloud infrastructure: design and maintain…"* / *«Cloud-Infrastruktur: Entwurf und Wartung…»*
+2. **Start with an action verb (imperative or infinitive)** — *"Design scalable APIs…"* / *«Skalierbare APIs entwerfen…»*
+3. **Open with a context / situation** — *"In close collaboration with the data team, you…"* / *«In enger Zusammenarbeit mit dem Data-Team…»*
+4. **Use a noun phrase or gerund** — *"Ownership of the CI/CD pipeline…"* / *«Verantwortung für die CI/CD-Pipeline…»*
+5. **Vary the subject** — swap between *you/we/the team/this role* (EN) or *Sie/Wir/Das Team/Diese Rolle* (DE)
+
+This rule applies to **all generation agents** that produce list content.
+
 ---
 
 ## §4  Style Routing Rubric
