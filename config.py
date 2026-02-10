@@ -98,6 +98,10 @@ VECTOR_STORE_DIR = os.getenv("VECTOR_STORE_DIR", "vector_store")
 # Used to rebuild the FAISS index automatically when the index is missing.
 STYLE_CHUNKS_PATH = os.getenv("STYLE_CHUNKS_PATH", "style_chunks.jsonl")
 
+# Pre-extracted duty chunks from Aufgaben Jobcategories.docx (committed to the repo).
+# Each chunk contains duties for a job category + seniority level.
+DUTY_CHUNKS_PATH = os.getenv("DUTY_CHUNKS_PATH", "duty_chunks.jsonl")
+
 # Path to source PDFs (fallback if JSONL doesn't exist).
 PDF_DIR = os.getenv("PDF_DIR", "PDFs_selling_psychology")
 

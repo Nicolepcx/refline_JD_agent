@@ -98,20 +98,34 @@ No configuration needed - works out of the box.
    - Uses PostgreSQL for LangGraph store (gold standards, user gripes)
    - Falls back to SQLite if PostgreSQL connection fails
 
-## Style Index (Motivkompass Vector Store)
+## Vector Index (Style + Duty Templates)
 
-The style system uses a FAISS vector store containing Motivkompass style chunks
-(hooks, adjectives, syntax rules, do/don't guidelines) extracted from the selling
-psychology PDFs. The index powers the Style Router → Style Retriever pipeline.
+The FAISS vector store serves **two** purposes from a single index:
+
+| Data Source | JSONL File | Chunks | What it powers |
+|---|---|---|---|
+| **Marketing Psychology PDFs** (Motivkompass) | `style_chunks.jsonl` (~23 KB) | ~200 style chunks (hooks, adjectives, syntax, do/don'ts) | Style Router → Style Retriever pipeline |
+| **Job Categories DOCX** (Aufgaben) | `duty_chunks.jsonl` (~224 KB) | ~376 duty templates (188 junior + 188 senior across 183 categories) | 3-tier duty cascade in the generator |
+
+Both JSONL files are **committed to the repo** so no source PDFs or DOCX files need to be uploaded to the server. The FAISS index is built from these files on first startup.
 
 ### How it works
 
-1. **`style_chunks.jsonl`** — pre-extracted style chunks are committed to the repo (~23 KB).
-2. **On startup**, `services/startup.py` checks if the FAISS index exists:
+1. **`style_chunks.jsonl`** + **`duty_chunks.jsonl`** — pre-extracted chunks committed to the repo.
+2. **On startup**, `services/startup.py` → `ensure_style_index()` checks if the FAISS index exists:
    - **Found** → reuses it instantly (zero API calls)
-   - **Missing** → auto-rebuilds from the JSONL (one embedding API call, ~200 chunks, < 30 seconds)
-3. **Fallback** — if both JSONL and PDFs are absent, the system uses hardcoded defaults
-   (fully functional, just less nuanced).
+   - **Missing** → auto-rebuilds from both JSONL files (one embedding API call, ~576 chunks, < 60 seconds)
+3. **Fallback** — if both JSONL files and source documents are absent:
+   - Style routing falls back to hardcoded defaults (functional, less nuanced)
+   - Duty cascade skips tier 2 (category match) and lets the LLM generate duties
+
+### Duty cascade (3-tier priority)
+
+The generator resolves duties in this order:
+
+1. **User-provided duties** — pre-filled in the "Duty" text area (highest priority)
+2. **Job category match** — semantic search against `duty_chunks.jsonl` in the vector store, filtered by seniority (junior/mid → junior templates; senior/lead/principal → senior templates)
+3. **LLM generation** — fallback only if tiers 1 and 2 produce nothing
 
 ### Option A: Persistent Volume (Recommended)
 
@@ -127,8 +141,8 @@ With a persistent volume the index is built **once** and survives deploys/restar
 
 ### Option B: No Volume (Auto-rebuild)
 
-Without a volume the index is rebuilt from `style_chunks.jsonl` on every deploy.
-This adds ~30 seconds to cold starts and costs a small embedding API call.
+Without a volume the index is rebuilt from `style_chunks.jsonl` + `duty_chunks.jsonl` on every deploy.
+This adds ~60 seconds to cold starts and costs a small embedding API call.
 No configuration needed — it just works.
 
 ### Option C: PostgreSQL-backed Vector Store (Future)
@@ -171,10 +185,10 @@ The app includes optional password protection for MVP testing:
    - `POSTGRES_CONNECTION_STRING` (if using managed PostgreSQL)
    - See full list above
 
-3. **Add Persistent Volume** (recommended, for style index):
+3. **Add Persistent Volume** (recommended, for style + duty index):
    - Create persistent volume (1 GiB)
    - Mount to `/app/vector_store`
-   - The style index auto-builds on first startup
+   - The combined index auto-builds on first startup from committed JSONL files
 
 4. **Add Managed PostgreSQL Database** (optional):
    - Create database cluster
@@ -183,7 +197,7 @@ The app includes optional password protection for MVP testing:
 
 5. **Deploy**:
    - Push to GitHub → DigitalOcean auto-deploys
-   - First deploy: style index builds from `style_chunks.jsonl` (~30 sec)
+   - First deploy: index builds from `style_chunks.jsonl` + `duty_chunks.jsonl` (~60 sec)
    - Subsequent deploys: instant (index persists on volume)
 
 ## Code Changes Summary
@@ -195,26 +209,46 @@ The following changes support both local and production:
    - `STREAMLIT_PASSWORD` for password protection
    - `VECTOR_STORE_DIR` — path to FAISS index directory
    - `STYLE_CHUNKS_PATH` — path to pre-extracted style JSONL
+   - `DUTY_CHUNKS_PATH` — path to pre-extracted duty JSONL
    - `MODEL_EMBEDDING` — embedding model name for OpenRouter
 
-2. **`services/startup.py`** (new):
-   - `ensure_style_index()` — auto-builds FAISS index from JSONL or PDFs
-   - `get_style_vector_store()` — cached singleton for the style vector store
+2. **`services/startup.py`**:
+   - `ensure_style_index()` — auto-builds FAISS index from both JSONL files (style + duty)
+   - `get_vector_store_manager()` — cached singleton for the combined vector store
+   - `_embed_from_jsonl()` — reads both `style_chunks.jsonl` and `duty_chunks.jsonl`, embeds into a single FAISS index
 
 3. **`services/vector_store.py`**:
    - `_build_embeddings()` routes through OpenRouter by default
    - `get_vector_store_manager()` uses `VECTOR_STORE_DIR` from config
 
-4. **`graph/job_graph.py`**:
-   - `node_style_router` uses `get_style_vector_store()` from startup module
+4. **`services/duty_ingestion.py`**:
+   - Extracts duty templates from `Aufgaben Jobcategories.docx` → `duty_chunks.jsonl`
+   - Parses 183 job categories with junior/senior duty bullet points
+
+5. **`services/duty_retriever.py`**:
+   - `retrieve_duty_templates()` — semantic search for matching job category duties
+   - `_map_seniority()` — maps detailed seniority labels to junior/senior for retrieval
+
+6. **`graph/job_graph.py`**:
+   - `node_style_router` uses `get_vector_store_manager()` from startup module
+   - `node_generator_expert` resolves the 3-tier duty cascade before generation
    - `build_job_graph()` accepts `postgres_connection_string`
 
-5. **`app.py`**:
+7. **`generators/job_generator.py`**:
+   - `_build_duties_prompt_section()` — builds duty context block per tier
+   - `_build_duties_instruction()` — output schema instruction for duties
+   - `_post_process_duties()` — enforces provided duty bullets in LLM output
+
+8. **`app.py`**:
    - Calls `ensure_style_index()` on startup (before serving)
    - Password protection check (if `STREAMLIT_PASSWORD` is set)
 
-6. **`.do/app.yaml`** (new):
+9. **`.do/app.yaml`**:
    - DigitalOcean App Platform spec (reference template)
+
+10. **Committed data files**:
+    - `style_chunks.jsonl` — ~200 Motivkompass style chunks (~23 KB)
+    - `duty_chunks.jsonl` — ~376 job category duty templates (~224 KB)
 
 ## Testing Locally
 
@@ -237,12 +271,12 @@ The following changes support both local and production:
 - Check Streamlit session state is not being cleared
 - Try clearing browser cache/cookies
 
-### Style Index Not Building
+### Style / Duty Index Not Building
 
 - Check logs for `[Startup]` messages — they explain what happened
 - Verify `OPENROUTER_API_KEY` is set (needed for embedding API call)
-- Verify `style_chunks.jsonl` exists in the repo root
-- If no JSONL and no PDFs: the system uses hardcoded defaults (still functional)
+- Verify `style_chunks.jsonl` and `duty_chunks.jsonl` exist in the repo root
+- If JSONL files are missing: style routing falls back to hardcoded defaults; duty cascade skips tier 2 (still functional)
 
 ### Vector Store Not Persisting
 
@@ -251,26 +285,58 @@ The following changes support both local and production:
 - Check volume permissions
 - Without a volume, the index auto-rebuilds from JSONL on each deploy (still works)
 
-## Architecture: Style Pipeline on Deploy
+## Architecture: Vector Index Pipeline on Deploy
 
 ```
-┌─────────────────────────────────────────────────┐
-│  App Startup (app.py)                           │
-│                                                 │
-│  1. ensure_style_index()                        │
-│     ├─ FAISS index exists? → load (instant)     │
-│     ├─ style_chunks.jsonl? → embed (~30 sec)    │
-│     └─ PDFs available?     → extract + embed    │
-│     └─ Nothing?            → hardcoded defaults │
-│                                                 │
-│  2. get_style_vector_store()  ← singleton       │
-│     └─ Used by node_style_router in LangGraph   │
-│                                                 │
-│  3. Graph Execution                             │
-│     START → style_router → generator → ...      │
-│              │                                  │
-│              └─ StyleKit injected into prompt    │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  App Startup (app.py)                                    │
+│                                                          │
+│  1. ensure_style_index()                                 │
+│     ├─ FAISS index exists?  → load (instant, 0 API)     │
+│     ├─ JSONL files present? → embed both (~60 sec)       │
+│     │   ├─ style_chunks.jsonl  → ~200 style chunks       │
+│     │   └─ duty_chunks.jsonl   → ~376 duty templates     │
+│     ├─ Source PDFs/DOCX?    → extract → embed            │
+│     └─ Nothing?             → hardcoded defaults          │
+│                                                          │
+│  2. get_vector_store_manager()  ← singleton              │
+│     ├─ Used by node_style_router (style retrieval)       │
+│     └─ Used by node_generator_expert (duty retrieval)    │
+│                                                          │
+│  3. Graph Execution                                      │
+│     START ──┬─ style_router ──┐                          │
+│             └─ scrape_company ─┤                         │
+│                                ▼                         │
+│                           generator                      │
+│                         ┌─────┴─────┐                    │
+│                         │ StyleKit  │ duty_bullets        │
+│                         │ (prompt)  │ (prompt)            │
+│                         └───────────┘                    │
+│                              ▼                           │
+│                      ruler_scorer → ...                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Data flow: Duty Cascade
+
+```
+┌────────────────────┐
+│  User provides     │──→ Tier 1: duty_source = "user"
+│  duty keywords?    │        (highest priority, used as-is)
+└────────┬───────────┘
+         │ No
+         ▼
+┌────────────────────┐
+│  Vector DB match   │──→ Tier 2: duty_source = "category"
+│  for job title +   │        (from duty_chunks.jsonl, filtered by seniority)
+│  seniority?        │
+└────────┬───────────┘
+         │ No
+         ▼
+┌────────────────────┐
+│  LLM generates     │──→ Tier 3: duty_source = "llm"
+│  duties freely     │        (fallback, infers from job title + industry)
+└────────────────────┘
 ```
 
 ## Next Steps (Future Production)
@@ -280,3 +346,5 @@ The following changes support both local and production:
 3. Add database migrations for schema changes
 4. Set up monitoring and alerting
 5. Configure backup strategies for PostgreSQL
+6. Add more job category templates (expand `duty_chunks.jsonl`)
+7. Implement A/B testing for style profiles vs. duty template effectiveness

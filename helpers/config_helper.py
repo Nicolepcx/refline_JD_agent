@@ -33,6 +33,7 @@ def get_job_config_from_session() -> JobGenerationConfig:
         max_years_experience=max_years,
         skills=_parse_skills_from_session(),
         benefit_keywords=_parse_benefits_from_session(),
+        duty_keywords=_parse_duty_keywords_from_session(),
     )
 
 
@@ -109,6 +110,31 @@ def _parse_skills_from_session() -> list[SkillItem]:
             skills.append(SkillItem(name=line))
     
     return skills
+
+
+def _parse_duty_keywords_from_session() -> list[str]:
+    """
+    Parse duty keywords from the 'duties' text area in session state.
+    
+    These are user-provided duty bullet points that take highest priority
+    in the 3-tier duty cascade:
+      1. User-provided (this function)
+      2. Job-category match from vector DB
+      3. LLM generation (fallback)
+    """
+    duties_text = st.session_state.get("duties", "")
+    if not duties_text or not duties_text.strip():
+        return []
+    
+    keywords = []
+    for line in duties_text.strip().splitlines():
+        line = line.strip()
+        # Strip common bullet markers
+        line = line.lstrip("•-*– ").strip()
+        if line and len(line) > 5:
+            keywords.append(line)
+    
+    return keywords
 
 
 def _parse_benefits_from_session() -> list[str]:

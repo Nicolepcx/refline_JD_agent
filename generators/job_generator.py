@@ -51,12 +51,155 @@ def explain_temperature(cfg: JobGenerationConfig) -> str:
     return "\n".join(parts)
 
 
+###############################################################################
+# ── Duty helpers (shared by sync + async renderers) ────────────────────────
+###############################################################################
+
+def _build_duties_prompt_section(
+    duty_bullets: Optional[List[str]],
+    duty_source: Optional[str],
+    lang: str,
+) -> str:
+    """
+    Build the context section that tells the LLM *what* duty bullets to use.
+
+    Three tiers:
+      1. duty_source == "user"     → user-provided keywords (highest priority)
+      2. duty_source == "category" → matched from job-category vector DB
+      3. duty_source is None / "llm" → let the LLM generate freely
+    """
+    if not duty_bullets:
+        # Tier 3: no pre-filled duties – LLM generates
+        if lang == "en":
+            return (
+                "No specific duty templates are available. "
+                "Generate 5 to 8 realistic bullet points describing day-to-day "
+                "responsibilities for this role, industry, and seniority level."
+            )
+        return (
+            "Es liegen keine spezifischen Aufgabenvorlagen vor. "
+            "Erstelle 5 bis 8 realistische Stichpunkte zu den täglichen Aufgaben "
+            "passend zu Rolle, Branche und Seniorität."
+        )
+
+    tags = "\n".join(f"• {b}" for b in duty_bullets)
+
+    if duty_source == "user":
+        # Tier 1: user-typed keywords
+        if lang == "en":
+            return (
+                "IMPORTANT — Duties (provided by the user):\n"
+                f"{tags}\n"
+                "You MUST use ONLY these duty bullet points. "
+                "Expand each one into a full, grammatically correct sentence. "
+                "Do NOT add any duties beyond this list."
+            )
+        return (
+            "WICHTIG — Aufgaben (vom Nutzer vorgegeben):\n"
+            f"{tags}\n"
+            "Du MUSST AUSSCHLIESSLICH diese Aufgaben verwenden. "
+            "Erweitere jeden Punkt zu einem vollständigen, grammatikalisch korrekten Satz. "
+            "Füge KEINE weiteren Aufgaben hinzu."
+        )
+
+    # Tier 2: category template from vector DB
+    if lang == "en":
+        return (
+            "Duties (matched from job-category templates — use as a strong guide):\n"
+            f"{tags}\n"
+            "Use these duty templates as the primary basis for the duties section. "
+            "You may lightly rephrase for fluency but do NOT remove any of these "
+            "duties and do NOT invent entirely new ones."
+        )
+    return (
+        "Aufgaben (aus Jobkategorie-Vorlagen — als starke Orientierung verwenden):\n"
+        f"{tags}\n"
+        "Verwende diese Aufgabenvorlagen als Hauptgrundlage für den Aufgabenbereich. "
+        "Leichte Umformulierungen sind erlaubt, aber entferne KEINE der genannten "
+        "Aufgaben und erfinde KEINE völlig neuen."
+    )
+
+
+def _build_duties_instruction(
+    duty_bullets: Optional[List[str]],
+    duty_source: Optional[str],
+    lang: str,
+) -> str:
+    """
+    One-line instruction for the output-schema section of the prompt that
+    tells the LLM how to fill the ``duties`` field.
+    """
+    if duty_bullets and duty_source in ("user", "category"):
+        n = len(duty_bullets)
+        if lang == "en":
+            return (
+                f"duties: Use EXACTLY the {n} duty bullet points provided above. "
+                "Expand each into a polished sentence. Do NOT add extras."
+            )
+        return (
+            f"duties: Verwende GENAU die {n} oben angegebenen Aufgabenpunkte. "
+            "Erweitere jeden zu einem ausformulierten Satz. Füge KEINE weiteren hinzu."
+        )
+    # LLM-generate fallback
+    if lang == "en":
+        return "duties: 5 to 8 bullets describing day-to-day responsibilities."
+    return "duties: 5 bis 8 Stichpunkte zu den täglichen Aufgaben."
+
+
+def _post_process_duties(
+    generated_duties: List[str],
+    duty_bullets: List[str],
+    duty_source: str,
+) -> List[str]:
+    """
+    Post-process LLM-generated duties to enforce the provided bullets.
+
+    If the source is "user" or "category", we map each provided bullet to the
+    best-matching generated sentence (same fuzzy logic used for benefits).
+    Falls back to the raw bullet if no good match is found.
+    """
+    if not duty_bullets:
+        return generated_duties
+
+    filtered: List[str] = []
+    for bullet in duty_bullets:
+        bullet_lower = bullet.lower().strip()
+        best_match: Optional[str] = None
+        best_score = 0.0
+
+        for gen in generated_duties:
+            gen_lower = gen.lower()
+            if bullet_lower in gen_lower:
+                score = 1.0
+            elif any(
+                word in gen_lower
+                for word in bullet_lower.split()
+                if len(word) > 3
+            ):
+                score = 0.5
+            else:
+                score = 0.0
+
+            if score > best_score:
+                best_score = score
+                best_match = gen
+
+        filtered.append(best_match if best_match and best_score > 0 else bullet)
+
+    return filtered
+
+
+###############################################################################
+
+
 def render_job_body(
     job_title: str,
     cfg: JobGenerationConfig,
     temperature: float | None = None,
     gold_examples: List[str] | None = None,
     style_kit: Optional[StyleKit] = None,
+    duty_bullets: Optional[List[str]] = None,
+    duty_source: Optional[str] = None,
 ) -> JobBody:
     """
     Pure JD generator.
@@ -73,12 +216,16 @@ def render_job_body(
                    When present, its prompt block is injected to guide tone, adjectives,
                    hooks, and sentence structure.  When absent, generation works fine
                    using the existing tone/formality system.
+        duty_bullets: Pre-resolved duty bullet points from the 3-tier cascade
+                     (user input → category match → empty for LLM fallback).
+        duty_source: Source of duty_bullets: "user", "category", or "llm".
     
     Context Engineering for MAS:
     - Gold examples are added as few-shot examples when available
     - Examples guide style/structure but content is adapted to current job
     - Falls back gracefully when no gold standards exist
     - StyleKit (when provided) is injected as a dedicated prompt section
+    - Duty cascade: user duties > category template > LLM generation
     """
     cfg = cfg.with_industry_defaults()
     lang = cfg.language
@@ -201,6 +348,9 @@ def render_job_body(
                 "WICHTIG: Es wurden keine Benefit Stichworte angegeben. Das Benefits Feld muss eine leere Liste [] sein."
             )
 
+    # Duties line — 3-tier cascade: user > category template > LLM fallback
+    duties_line = _build_duties_prompt_section(duty_bullets, duty_source, lang)
+
     # Build few-shot examples from gold standards if available (with proper fallback)
     examples_section = ""
     if gold_examples and len(gold_examples) > 0:
@@ -244,6 +394,7 @@ def render_job_body(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{duties_line}\n"
             f"{style_section}"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
@@ -251,7 +402,7 @@ def render_job_body(
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
             "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
-            "duties: 5 to 8 bullets describing day to day responsibilities.\n"
+            f"{_build_duties_instruction(duty_bullets, duty_source, 'en')}\n"
             "summary: 1 short closing line inviting candidates to apply.\n"
         )
     else:
@@ -262,6 +413,7 @@ def render_job_body(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{duties_line}\n"
             f"{style_section}"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
@@ -269,12 +421,16 @@ def render_job_body(
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
             "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
-            "duties: 5 bis 8 Stichpunkte zu den täglichen Aufgaben.\n"
+            f"{_build_duties_instruction(duty_bullets, duty_source, 'de')}\n"
             "summary: 1 kurzer Abschlusssatz, der zur Bewerbung einlädt.\n"
         )
 
     payload: JobBody = writer_model.invoke(prompt)
     
+    # Post-process duties: if we had pre-filled duties (tier 1 or 2), enforce them
+    if duty_bullets and duty_source in ("user", "category"):
+        payload.duties = _post_process_duties(payload.duties, duty_bullets, duty_source)
+
     # Post-process benefits to ensure ONLY the provided keywords are used
     # Enforce: exactly one benefit per keyword, no more, no less
     if cfg.benefit_keywords:
@@ -323,11 +479,16 @@ def generate_job_body_candidate(
     temp_jitter: float = 0.0,
     gold_examples: List[str] | None = None,
     style_kit: Optional[StyleKit] = None,
+    duty_bullets: Optional[List[str]] = None,
+    duty_source: Optional[str] = None,
 ) -> JobBody:
     """Use the same logic as the graph, with a slightly adjusted temperature."""
     base_temp = cfg.temperature
     temp = max(0.1, min(base_temp + temp_jitter, 0.9))
-    return render_job_body(job_title, cfg, temperature=temp, gold_examples=gold_examples, style_kit=style_kit)
+    return render_job_body(
+        job_title, cfg, temperature=temp, gold_examples=gold_examples,
+        style_kit=style_kit, duty_bullets=duty_bullets, duty_source=duty_source,
+    )
 
 
 async def render_job_body_async(
@@ -336,6 +497,8 @@ async def render_job_body_async(
     temperature: float | None = None,
     gold_examples: List[str] | None = None,
     style_kit: Optional[StyleKit] = None,
+    duty_bullets: Optional[List[str]] = None,
+    duty_source: Optional[str] = None,
 ) -> JobBody:
     """
     Async version of render_job_body that uses ainvoke for true parallel execution.
@@ -478,6 +641,9 @@ async def render_job_body_async(
                 "WICHTIG: Es wurden keine Benefit Stichworte angegeben. Das Benefits Feld muss eine leere Liste [] sein."
             )
 
+    # Duties line — 3-tier cascade (same logic as sync version)
+    duties_line = _build_duties_prompt_section(duty_bullets, duty_source, lang)
+
     # Build few-shot examples from gold standards if available (with proper fallback)
     examples_section = ""
     if gold_examples and len(gold_examples) > 0:
@@ -521,6 +687,7 @@ async def render_job_body_async(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{duties_line}\n"
             f"{style_section}"
             f"{examples_section}"
             f"Job title: {job_title}\n\n"
@@ -528,7 +695,7 @@ async def render_job_body_async(
             "job_description: 2 to 4 sentences for role and context.\n"
             "requirements: 6 to 10 bullets matching seniority and skills.\n"
             "benefits: ONLY use the benefit keywords provided above. Expand each keyword into a full, grammatically correct sentence (like 'Remote work in Switzerland' from 'remote work switzerland'). Create exactly one bullet per keyword. Do NOT add any other benefits.\n"
-            "duties: 5 to 8 bullets describing day to day responsibilities.\n"
+            f"{_build_duties_instruction(duty_bullets, duty_source, 'en')}\n"
             "summary: 1 short closing line inviting candidates to apply.\n"
         )
     else:
@@ -539,6 +706,7 @@ async def render_job_body_async(
             f"{seniority_line}\n"
             f"{skills_line}\n"
             f"{benefits_line}\n"
+            f"{duties_line}\n"
             f"{style_section}"
             f"{examples_section}"
             f"Stellentitel: {job_title}\n\n"
@@ -546,13 +714,17 @@ async def render_job_body_async(
             "job_description: 2 bis 4 Sätze zu Rolle und Kontext.\n"
             "requirements: 6 bis 10 Stichpunkte, passend zur Seniorität und zu den Skills.\n"
             "benefits: Verwende AUSSCHLIESSLICH die oben angegebenen Benefit Stichworte. Erweitere jedes Stichwort zu einem vollständigen, grammatikalisch korrekten Satz (z.B. 'Remote Work in der Schweiz' aus 'Remote Work Schweiz'). Erstelle genau einen Bullet Point pro Stichwort. Füge KEINE weiteren Benefits hinzu.\n"
-            "duties: 5 bis 8 Stichpunkte zu den täglichen Aufgaben.\n"
+            f"{_build_duties_instruction(duty_bullets, duty_source, 'de')}\n"
             "summary: 1 kurzer Abschlusssatz, der zur Bewerbung einlädt.\n"
         )
 
     # Use ainvoke for true async execution
     payload: JobBody = await writer_model.ainvoke(prompt)
     
+    # Post-process duties: if we had pre-filled duties (tier 1 or 2), enforce them
+    if duty_bullets and duty_source in ("user", "category"):
+        payload.duties = _post_process_duties(payload.duties, duty_bullets, duty_source)
+
     # Post-process benefits to ensure ONLY the provided keywords are used
     # Enforce: exactly one benefit per keyword, no more, no less
     if cfg.benefit_keywords:
@@ -601,9 +773,14 @@ async def generate_job_body_candidate_async(
     temp_jitter: float = 0.0,
     gold_examples: List[str] | None = None,
     style_kit: Optional[StyleKit] = None,
+    duty_bullets: Optional[List[str]] = None,
+    duty_source: Optional[str] = None,
 ) -> JobBody:
     """Async version that uses ainvoke for true parallel execution."""
     base_temp = cfg.temperature
     temp = max(0.1, min(base_temp + temp_jitter, 0.9))
-    return await render_job_body_async(job_title, cfg, temperature=temp, gold_examples=gold_examples, style_kit=style_kit)
+    return await render_job_body_async(
+        job_title, cfg, temperature=temp, gold_examples=gold_examples,
+        style_kit=style_kit, duty_bullets=duty_bullets, duty_source=duty_source,
+    )
 

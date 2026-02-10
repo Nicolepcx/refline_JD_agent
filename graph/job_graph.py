@@ -45,6 +45,10 @@ class JobState(TypedDict, total=False):
     # Style routing (Motivkompass)
     style_kit: Optional[StyleKit]
     
+    # Duty cascade (user → category template → LLM fallback)
+    duty_bullets: Optional[List[str]]
+    duty_source: Optional[str]  # "user" | "category" | "llm"
+    
     # Outputs
     job_body_json: Optional[str]
     style_profile_json: Optional[str]
@@ -131,8 +135,8 @@ async def node_style_router(state: JobState) -> Dict:
     #    Use the cached singleton from startup (avoids re-creating on every call)
     vector_store = None
     try:
-        from services.startup import get_style_vector_store
-        vector_store = get_style_vector_store()
+        from services.startup import get_vector_store_manager
+        vector_store = get_vector_store_manager()
     except Exception:
         pass  # Vector store not available — defaults will be used
 
@@ -228,7 +232,37 @@ async def node_generator_expert(
     
     # Get style kit from blackboard (populated by style_router node)
     style_kit = state.get("style_kit")
-    
+
+    # ── 3-tier duty cascade ──────────────────────────────────────────
+    # Tier 1: user-provided duties (from config)
+    duty_bullets: List[str] = []
+    duty_source: str = "llm"  # default: let LLM generate
+
+    if cfg.duty_keywords:
+        duty_bullets = cfg.duty_keywords
+        duty_source = "user"
+        logger.info("Duties: tier-1 (user-provided) — %d bullets", len(duty_bullets))
+    else:
+        # Tier 2: category match from vector DB
+        try:
+            from services.duty_retriever import retrieve_duty_templates
+            from services.startup import get_vector_store_manager
+            vs = get_vector_store_manager()
+            matched = retrieve_duty_templates(
+                job_title=state["job_title"],
+                seniority_label=cfg.seniority_label,
+                vector_store=vs,
+            )
+            if matched:
+                duty_bullets = matched
+                duty_source = "category"
+                logger.info("Duties: tier-2 (category match) — %d bullets", len(duty_bullets))
+        except Exception as e:
+            logger.warning("Duty retrieval failed, falling back to LLM: %s", e)
+
+    if not duty_bullets:
+        logger.info("Duties: tier-3 (LLM generation)")
+
     # Generate initial candidates using gold standards as examples
     num_candidates = 3
     tasks = []
@@ -241,11 +275,17 @@ async def node_generator_expert(
                 temp_jitter=(i * 0.1),
                 gold_examples=gold_examples if gold_examples else None,
                 style_kit=style_kit,
+                duty_bullets=duty_bullets if duty_bullets else None,
+                duty_source=duty_source,
             )
         )
     seeds = await asyncio.gather(*tasks)
     
-    return {"candidates": seeds}
+    return {
+        "candidates": seeds,
+        "duty_bullets": duty_bullets,
+        "duty_source": duty_source,
+    }
 
 
 async def node_style_expert(

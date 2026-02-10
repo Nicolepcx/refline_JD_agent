@@ -156,6 +156,17 @@ class JobGenerationConfig(BaseModel):
 
     skills: List[SkillItem] = Field(default_factory=list)
     benefit_keywords: List[str] = Field(default_factory=list)
+    duty_keywords: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Pre-filled duty bullet points.  Sources (priority cascade):\n"
+            "  1. User-provided text in the Duty text area\n"
+            "  2. Job-category match from the duty vector store\n"
+            "  3. (empty) → LLM generates duties from scratch\n"
+            "When non-empty the generator MUST use these bullets as-is and may\n"
+            "only lightly rephrase for grammar/flow."
+        ),
+    )
 
     @property
     def temperature(self) -> float:
