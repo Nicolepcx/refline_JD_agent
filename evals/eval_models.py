@@ -59,22 +59,47 @@ class EvalResult(BaseModel):
     category_code: str
     block_name: str
 
-    # RULER score
+    # RULER score (now style-aware — the RULER prompt includes expected color profile)
     ruler_score: float = Field(0.0, description="RULER score in [0, 1]")
 
-    # Structural checks
+    # ── Motivkompass style adherence ──
+    expected_primary_color: Optional[str] = Field(
+        None,
+        description="Primary Motivkompass color from the style router (red/yellow/green/blue)",
+    )
+    expected_secondary_color: Optional[str] = Field(
+        None,
+        description="Secondary color if within margin, else None",
+    )
+
+    # ── Structural checks ──
     duty_count: int = 0
     req_count: int = 0
     benefit_count: int = 0
     has_summary: bool = False
 
-    # Quality checks (DE-specific flags are None for EN)
+    # ── Quality checks (DE-specific flags are None for EN) ──
     eszett_free: Optional[bool] = Field(
         None, description="True if no ß found (DE only)"
     )
     pronoun_ok: Optional[bool] = Field(
         None, description="True if Sie/du consistent with formality (DE only)"
     )
+
+    # ── Swiss German vocabulary compliance (DE only) ──
+    swiss_vocab_ok: Optional[bool] = Field(
+        None,
+        description="True if no DE-DE vocabulary found — text uses proper CH-DE terms (DE only)",
+    )
+    swiss_vocab_violations: int = Field(
+        0,
+        description="Count of DE-DE vocabulary occurrences that should be CH-DE (DE only)",
+    )
+    swiss_vocab_details: Optional[str] = Field(
+        None,
+        description="Human-readable list of DE-DE violations, e.g. 'Gehalt (→ Salär) ×1' (DE only)",
+    )
+
     variety_score: float = Field(
         0.0, description="Ratio of unique first-words across all bullet lists"
     )

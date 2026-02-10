@@ -30,12 +30,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import art
+from openai.types.chat.chat_completion import Choice
+from openai.types.chat import ChatCompletionMessage
 
 # Project imports  (run from project root: python -m evals.run_eval)
-from models.job_models import JobBody, JobGenerationConfig
+from models.job_models import JobBody, JobGenerationConfig, StyleProfile
 from generators.job_generator import render_job_body_async
-from ruler.ruler_utils import jd_candidate_to_trajectory, score_group_with_fallback
-from services.swiss_german import check_pronoun_consistency
+from ruler.ruler_utils import score_group_with_fallback
+from services.swiss_german import check_pronoun_consistency, check_swiss_vocab
+from services.style_router import route_style
 from evals.eval_models import EvalScenario, EvalResult
 
 
@@ -78,6 +81,137 @@ def _sentence_start_variety(bullet_lists: List[List[str]]) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Motivkompass color descriptions (for RULER prompt injection)
+# ---------------------------------------------------------------------------
+
+_COLOR_TONE_DESCRIPTIONS: dict[str, str] = {
+    "red": (
+        "Red (Macher): Direct, results-oriented, short declarative sentences, "
+        "active voice, power language, speed/status emphasis, no passive or committee-speak."
+    ),
+    "yellow": (
+        "Yellow (Entertainer): Creative, friendly, freedom-focused, team spirit, "
+        "variety, informal energy, fun, no rigidity or bureaucracy."
+    ),
+    "blue": (
+        "Blue (Denker): Fact-based, structured, evidence-driven, precise, "
+        "quality-focused, concrete, no hype or vague superlatives."
+    ),
+    "green": (
+        "Green (Bewahrer): Trust-building, harmonious, relationship-oriented, "
+        "safety-focused, belonging, inclusive, no pressure or aggression."
+    ),
+}
+
+_AXIS_DESCRIPTIONS: dict[str, str] = {
+    "proaktiv": "Proaktiv: Short declarative sentences, active voice, imperatives allowed.",
+    "reaktiv": "Reaktiv: Longer connected sentences, conditional/inclusive phrasing.",
+    "personenbezug": "Personenbezug: 'you/we' framing, emotional cues, community language.",
+    "objektbezug": "Objektbezug: Third-person, evidence, data, process-oriented language.",
+}
+
+
+# ---------------------------------------------------------------------------
+# Style-aware RULER trajectory builder (eval-only)
+# ---------------------------------------------------------------------------
+
+def _build_eval_trajectory(
+    scenario: EvalScenario,
+    cfg: JobGenerationConfig,
+    job_body: JobBody,
+    style_profile: StyleProfile,
+) -> art.Trajectory:
+    """
+    Build a RULER trajectory that includes the expected Motivkompass profile
+    and (for DE texts) Swiss German writing rules in the scoring context.
+
+    This makes RULER penalise style drift and CH-DE vocabulary violations
+    as part of the overall quality score.
+    """
+    # ── Style context block ──
+    primary_desc = _COLOR_TONE_DESCRIPTIONS.get(style_profile.primary_color, "")
+    mode_desc = _AXIS_DESCRIPTIONS.get(style_profile.interaction_mode, "")
+    frame_desc = _AXIS_DESCRIPTIONS.get(style_profile.reference_frame, "")
+
+    style_block = (
+        f"\n## Expected Motivkompass Style Profile\n"
+        f"Primary color: {style_profile.primary_color}\n"
+        f"  → {primary_desc}\n"
+        f"Mode: {mode_desc}\n"
+        f"Frame: {frame_desc}\n"
+    )
+    if style_profile.secondary_color:
+        sec_desc = _COLOR_TONE_DESCRIPTIONS.get(style_profile.secondary_color, "")
+        style_block += f"Secondary color: {style_profile.secondary_color}\n  → {sec_desc}\n"
+
+    # ── Swiss German block (DE only) ──
+    swiss_block = ""
+    if scenario.language == "de":
+        swiss_block = (
+            "\n## Swiss German Writing Rules (MANDATORY for DE texts)\n"
+            "- No ß (Eszett) — always 'ss' (e.g. 'gross' not 'groß')\n"
+            "- Swiss vocabulary: 'Salär' not 'Gehalt', 'Ferien' not 'Urlaub', "
+            "'Matura' not 'Abitur', 'berufliche Vorsorge (BVG)' not 'betriebliche Altersvorsorge', "
+            "'Arbeitnehmende' not 'Arbeitnehmer', 'Pensionskasse' not 'Betriebsrente'\n"
+            "- Neutral, factual tone (less promotional than standard DE-DE)\n"
+            "- Pronoun consistency: "
+        )
+        if scenario.formality == "casual":
+            swiss_block += "'du' form throughout (never 'Sie' as formal address)\n"
+        else:
+            swiss_block += "'Sie' form throughout (never 'du' as informal address)\n"
+
+    system_msg = {
+        "role": "system",
+        "content": (
+            "You are an expert HR quality judge. You evaluate job descriptions for:\n"
+            "1. Clarity, tone, alignment with the requested role and seniority\n"
+            "2. Usefulness and realism for candidates\n"
+            "3. **Adherence to the specified Motivkompass style profile** (tone, sentence structure, vocabulary)\n"
+            "4. **Swiss German writing standards** (for DE texts: no ß, CH vocabulary, correct pronouns)\n"
+            "5. Sentence-start variety (no repetitive patterns in bullet lists)\n\n"
+            "Penalise texts that:\n"
+            "- Don't match the expected style color/tone\n"
+            "- Use DE-DE vocabulary instead of CH-DE (German texts only)\n"
+            "- Contain ß characters (German texts only)\n"
+            "- Have monotonous sentence openings\n"
+            "- Are generic, templated, or misaligned with seniority level"
+        ),
+    }
+
+    user_msg = {
+        "role": "user",
+        "content": (
+            "Evaluate the quality of the following job description.\n\n"
+            f"Job title: {scenario.job_title}\n"
+            f"Language: {scenario.language.upper()}\n"
+            f"Formality: {scenario.formality}\n"
+            f"Company type: {cfg.company_type}\n"
+            f"Seniority: {scenario.seniority_label}\n"
+            f"{style_block}"
+            f"{swiss_block}\n"
+            f"JobBody JSON:\n{job_body.model_dump_json(indent=2, ensure_ascii=False)}\n"
+        ),
+    }
+
+    assistant_msg = ChatCompletionMessage(
+        role="assistant",
+        content=job_body.model_dump_json(indent=2, ensure_ascii=False),
+    )
+
+    choice = Choice(
+        finish_reason="stop",
+        index=0,
+        message=assistant_msg,
+    )
+
+    return art.Trajectory(
+        messages_and_choices=[system_msg, user_msg, choice],
+        reward=0.0,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Build a JobGenerationConfig from an EvalScenario
 # ---------------------------------------------------------------------------
 
@@ -106,6 +240,11 @@ async def _run_one_scenario(
     Generate one JD and collect quality metrics.
     Does NOT score with RULER — that's done in batches afterward.
     """
+    cfg = _build_config(scenario)
+
+    # ── Determine expected Motivkompass color ──
+    style_profile = route_style(cfg)
+
     result = EvalResult(
         scenario_id=scenario.scenario_id,
         job_title=scenario.job_title,
@@ -115,9 +254,10 @@ async def _run_one_scenario(
         seniority_label=scenario.seniority_label,
         category_code=scenario.category_code,
         block_name=scenario.block_name,
+        expected_primary_color=style_profile.primary_color,
+        expected_secondary_color=style_profile.secondary_color,
     )
 
-    cfg = _build_config(scenario)
     job_body: Optional[JobBody] = None
 
     async with semaphore:
@@ -155,6 +295,13 @@ async def _run_one_scenario(
         result.eszett_free = _check_eszett(all_text)
         result.pronoun_ok = _check_pronoun(all_text, scenario.formality)
 
+        # ── Swiss vocabulary compliance ──
+        vocab_ok, vocab_count, vocab_details = check_swiss_vocab(all_text)
+        result.swiss_vocab_ok = vocab_ok
+        result.swiss_vocab_violations = vocab_count
+        if vocab_details:
+            result.swiss_vocab_details = "; ".join(vocab_details[:10])  # cap at 10 entries
+
     # ── Sentence-start variety ──
     result.variety_score = round(
         _sentence_start_variety([
@@ -175,14 +322,24 @@ async def _run_one_scenario(
 async def _score_batch(
     batch: List[Tuple[EvalScenario, JobBody, EvalResult]],
 ) -> None:
-    """Score a batch of (scenario, job_body, result) with RULER. Mutates result.ruler_score."""
+    """
+    Score a batch with RULER using style-aware trajectories.
+
+    The RULER prompt now includes the expected Motivkompass profile and
+    Swiss German rules, so the judge factors in style adherence and
+    CH-DE vocabulary compliance when scoring.
+
+    Mutates ``result.ruler_score`` in-place.
+    """
     if not batch:
         return
 
     trajectories = []
-    for scenario, job_body, _ in batch:
+    for scenario, job_body, result in batch:
         cfg = _build_config(scenario)
-        traj = jd_candidate_to_trajectory(scenario.job_title, cfg, job_body)
+        # Re-derive full style profile with correct axes (cheap, no LLM call)
+        style_profile = route_style(cfg)
+        traj = _build_eval_trajectory(scenario, cfg, job_body, style_profile)
         trajectories.append(traj)
 
     group = art.TrajectoryGroup(trajectories)
@@ -264,12 +421,17 @@ async def run_eval(
         "category_code",
         "block_name",
         "ruler_score",
+        "expected_primary_color",
+        "expected_secondary_color",
         "duty_count",
         "req_count",
         "benefit_count",
         "has_summary",
         "eszett_free",
         "pronoun_ok",
+        "swiss_vocab_ok",
+        "swiss_vocab_violations",
+        "swiss_vocab_details",
         "variety_score",
         "job_description_excerpt",
         "generation_time_s",
@@ -305,10 +467,27 @@ async def run_eval(
     if de_total:
         print(f"  Eszett-free: {len(de_ok)}/{len(de_total)}")
 
-    pronoun_ok = [r for r in all_results if r.language == "de" and r.pronoun_ok is True]
+    pronoun_ok_list = [r for r in all_results if r.language == "de" and r.pronoun_ok is True]
     pronoun_total = [r for r in all_results if r.language == "de" and r.pronoun_ok is not None]
     if pronoun_total:
-        print(f"  Pronoun OK:  {len(pronoun_ok)}/{len(pronoun_total)}")
+        print(f"  Pronoun OK:  {len(pronoun_ok_list)}/{len(pronoun_total)}")
+
+    # Swiss vocabulary compliance
+    vocab_ok_list = [r for r in all_results if r.language == "de" and r.swiss_vocab_ok is True]
+    vocab_total = [r for r in all_results if r.language == "de" and r.swiss_vocab_ok is not None]
+    if vocab_total:
+        print(f"  Swiss vocab: {len(vocab_ok_list)}/{len(vocab_total)}")
+        total_violations = sum(r.swiss_vocab_violations for r in vocab_total)
+        if total_violations > 0:
+            print(f"    Total DE-DE vocabulary violations: {total_violations}")
+
+    # Style color distribution
+    color_counts: dict[str, int] = {}
+    for r in all_results:
+        if r.expected_primary_color:
+            color_counts[r.expected_primary_color] = color_counts.get(r.expected_primary_color, 0) + 1
+    if color_counts:
+        print(f"  Style colors: {' | '.join(f'{c}: {n}' for c, n in sorted(color_counts.items()))}")
 
     variety = [r.variety_score for r in all_results if r.variety_score > 0]
     if variety:

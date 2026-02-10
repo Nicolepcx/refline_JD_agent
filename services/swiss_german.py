@@ -247,6 +247,76 @@ def check_pronoun_consistency(
     return count == 0, count
 
 
+# ---------------------------------------------------------------------------
+# §6  Swiss vocabulary violation detection (for eval / quality checks)
+# ---------------------------------------------------------------------------
+# These are the DE-DE source terms from _CH_TERM_MAP that should NEVER
+# appear in properly written Schweizer Schriftdeutsch.  The list only
+# includes entries where source ≠ replacement (i.e. actual differences).
+
+_DE_DE_VIOLATIONS: list[tuple[str, str, str]] = [
+    # (regex_pattern, plain_label, expected_CH_term)
+    # Employment & contracts
+    (r"\bTarifvertrag(?:s|e|es)?\b", "Tarifvertrag*", "Gesamtarbeitsvertrag (GAV)"),
+    (r"\bGehalt\b", "Gehalt", "Salär"),
+    (r"\bGehalts\b", "Gehalts", "Salärs"),
+    (r"\bGehälter\b", "Gehälter", "Saläre"),
+    (r"\bGehaltsvorstellung(?:en)?\b", "Gehaltsvorstellung*", "Salärvorstellung"),
+    (r"\bGehaltserhöhung\b", "Gehaltserhöhung", "Salärerhöhung"),
+    (r"\bGehaltsabrechnung\b", "Gehaltsabrechnung", "Lohnabrechnung"),
+    (r"\bArbeitnehmer(?:n|s)?\b", "Arbeitnehmer*", "Arbeitnehmende"),
+
+    # Education
+    (r"\bAbitur\b", "Abitur", "Matura"),
+    (r"\bAbiturient(?:in|en)?\b", "Abiturient*", "Maturand/in"),
+
+    # Leave
+    (r"\bUrlaub(?:s)?\b", "Urlaub*", "Ferien"),
+    (r"\bUrlaubstage\b", "Urlaubstage", "Ferientage"),
+    (r"\bUrlaubsanspruch\b", "Urlaubsanspruch", "Ferienanspruch"),
+
+    # Benefits / social security
+    (r"\bBetriebsrente\b", "Betriebsrente", "Pensionskasse (BVG)"),
+    (r"\b[Bb]etriebliche Altersvorsorge\b", "betriebliche Altersvorsorge", "berufliche Vorsorge (BVG)"),
+    (r"\bRentenversicherung\b", "Rentenversicherung", "AHV"),
+
+    # Transport / misc
+    (r"\bFahrrad\b", "Fahrrad", "Velo"),
+    (r"\bStraßenbahn\b", "Straßenbahn", "Tram"),
+    (r"\bTüte\b", "Tüte", "Sack"),
+]
+
+# Compile once for performance
+_DE_DE_VIOLATION_PATTERNS = [
+    (re.compile(pat), label, ch_term)
+    for pat, label, ch_term in _DE_DE_VIOLATIONS
+]
+
+
+def check_swiss_vocab(text: str) -> tuple[bool, int, list[str]]:
+    """
+    Detect DE-DE vocabulary that should be CH-DE in Swiss German text.
+
+    Returns:
+        (is_clean, violation_count, violation_details)
+        - is_clean: True if no DE-DE vocabulary found
+        - violation_count: total number of DE-DE term occurrences
+        - violation_details: list of human-readable strings like
+          ``"Gehalt (→ Salär) ×2"``
+    """
+    details: list[str] = []
+    total = 0
+
+    for pattern, label, ch_term in _DE_DE_VIOLATION_PATTERNS:
+        hits = pattern.findall(text)
+        if hits:
+            count = len(hits)
+            total += count
+            details.append(f"{label} (→ {ch_term}) ×{count}")
+
+    return total == 0, total, details
+
+
 def check_pronoun_consistency_on_list(
     items: List[str],
     formality: str,
