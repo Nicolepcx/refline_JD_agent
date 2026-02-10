@@ -119,7 +119,7 @@ def _results_to_dataframe(results: List[EvalResult]) -> pd.DataFrame:
     """Convert a list of EvalResult to a nicely formatted DataFrame."""
     rows = [r.model_dump() for r in results]
     df = pd.DataFrame(rows)
-    # Reorder columns for readability — style + Swiss checks are prominent
+    # Reorder columns for readability — scores & checks first, content at the end
     col_order = [
         "scenario_id", "ruler_score",
         "expected_primary_color", "expected_secondary_color",
@@ -130,7 +130,10 @@ def _results_to_dataframe(results: List[EvalResult]) -> pd.DataFrame:
         "duty_count", "req_count", "benefit_count", "has_summary",
         "variety_score",
         "generation_time_s", "category_code", "block_name",
-        "job_description_excerpt", "error",
+        # Full generated content (scrollable, for gold-standard review)
+        "gen_job_description", "gen_duties", "gen_requirements",
+        "gen_benefits", "gen_summary",
+        "error",
     ]
     cols = [c for c in col_order if c in df.columns]
     return df[cols]

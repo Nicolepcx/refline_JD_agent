@@ -104,7 +104,23 @@ class EvalResult(BaseModel):
         0.0, description="Ratio of unique first-words across all bullet lists"
     )
 
-    # Excerpts / debug info
-    job_description_excerpt: str = ""
+    # ── Full generated content (for gold-standard curation) ──
+    gen_job_description: str = Field(
+        "", description="Full generated job_description text"
+    )
+    gen_duties: str = Field(
+        "", description="Generated duties, joined by ' || ' separator"
+    )
+    gen_requirements: str = Field(
+        "", description="Generated requirements, joined by ' || ' separator"
+    )
+    gen_benefits: str = Field(
+        "", description="Generated benefits, joined by ' || ' separator"
+    )
+    gen_summary: str = Field(
+        "", description="Generated closing summary line"
+    )
+
+    # ── Meta ──
     generation_time_s: float = 0.0
     error: Optional[str] = None

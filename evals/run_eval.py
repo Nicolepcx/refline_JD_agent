@@ -281,7 +281,14 @@ async def _run_one_scenario(
     result.req_count = len(job_body.requirements)
     result.benefit_count = len(job_body.benefits)
     result.has_summary = bool(job_body.summary and job_body.summary.strip())
-    result.job_description_excerpt = (job_body.job_description or "")[:200]
+
+    # ── Full generated content (for gold-standard curation) ──
+    _SEP = " || "
+    result.gen_job_description = job_body.job_description or ""
+    result.gen_duties = _SEP.join(job_body.duties) if job_body.duties else ""
+    result.gen_requirements = _SEP.join(job_body.requirements) if job_body.requirements else ""
+    result.gen_benefits = _SEP.join(job_body.benefits) if job_body.benefits else ""
+    result.gen_summary = job_body.summary or ""
 
     # ── DE-specific checks ──
     if scenario.language == "de":
@@ -433,7 +440,12 @@ async def run_eval(
         "swiss_vocab_violations",
         "swiss_vocab_details",
         "variety_score",
-        "job_description_excerpt",
+        # Full generated content (for gold-standard curation)
+        "gen_job_description",
+        "gen_duties",
+        "gen_requirements",
+        "gen_benefits",
+        "gen_summary",
         "generation_time_s",
         "error",
     ]
