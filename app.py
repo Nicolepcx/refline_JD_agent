@@ -96,7 +96,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Initialize advanced generation settings (always enabled with blackboard architecture)
-st.session_state.use_advanced_generation = True
+# Use setdefault to avoid mutating state during render (causes extra re-runs)
+st.session_state.setdefault("use_advanced_generation", True)
 
 # Initialize user ID (in production, this would come from authentication)
 if "user_id" not in st.session_state:

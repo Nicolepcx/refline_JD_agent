@@ -64,58 +64,76 @@ def render_ruler_rankings():
             st.caption("No ranking details available for this run.")
 
 
+def _init_config_defaults():
+    """Set default values for config widgets ONCE via setdefault.
+
+    Using ``setdefault`` ensures we never overwrite a value the user (or a
+    widget) already placed in session state, and we never mutate state during
+    the render cycle — both of which can trigger unwanted Streamlit re-runs.
+    """
+    st.session_state.setdefault("use_advanced_generation", True)
+    st.session_state.setdefault("use_ruler", False)
+    st.session_state.setdefault("ruler_num_candidates", 3)
+    st.session_state.setdefault("config_language", "en")
+    st.session_state.setdefault("config_formality", "neutral")
+    st.session_state.setdefault("config_company_type", "scaleup")
+    st.session_state.setdefault("config_industry", "generic")
+    st.session_state.setdefault("config_seniority_label", "")
+    st.session_state.setdefault("config_min_years", 0)
+    st.session_state.setdefault("config_max_years", 0)
+    st.session_state.setdefault("config_skills", "")
+    st.session_state.setdefault("config_benefit_keywords", "")
+
+
 def render_config_sidebar():
-    """Render the configuration sidebar."""
+    """Render the configuration sidebar.
+
+    Widget values are managed entirely through ``st.session_state[key]``.
+    We NEVER pass both ``value=`` and ``key=`` to the same widget — doing so
+    is a Streamlit anti-pattern that can trigger extra re-runs / flicker.
+    """
+    _init_config_defaults()
+
     with st.sidebar:
         st.header("⚙️ Generation Settings")
-        
-        # Advanced generation with blackboard architecture is always enabled
-        # No need to show checkbox - it's the default behavior
-        use_advanced = True
-        st.session_state.use_advanced_generation = True
-        
+
         st.markdown("---")
-        
+
         # RULER toggle
+        # key-only — Streamlit reads the current value from session state
         use_ruler = st.checkbox(
             "Use RULER Ranking",
-            value=st.session_state.get("use_ruler", False),
             key="use_ruler",
             help="Generate multiple candidates and use RULER to automatically select the best one (slower but higher quality)"
         )
-        
+
         if use_ruler:
-            num_candidates = st.slider(
+            st.slider(
                 "Number of Candidates",
                 min_value=2,
                 max_value=5,
-                value=st.session_state.get("ruler_num_candidates", 3),
                 key="ruler_num_candidates",
                 help="More candidates = better quality but slower generation"
             )
-        
+
         st.markdown("---")
-        
+
         # Language
         st.selectbox(
             "Language",
             options=["en", "de"],
-            index=0 if st.session_state.get("config_language", "en") == "en" else 1,
             key="config_language",
             help="Language for the job description"
         )
-        
+
         # Formality
         st.selectbox(
             "Tone / Formality",
             options=["casual", "neutral", "formal"],
-            index=["casual", "neutral", "formal"].index(
-                st.session_state.get("config_formality", "neutral")
-            ),
             key="config_formality",
             help="Tone of the job description"
         )
-        
+
         # Company Type
         _company_types = [
             "startup", "scaleup", "sme", "corporate", "public_sector",
@@ -124,9 +142,6 @@ def render_config_sidebar():
         st.selectbox(
             "Company Type",
             options=_company_types,
-            index=_company_types.index(
-                st.session_state.get("config_company_type", "scaleup")
-            ),
             key="config_company_type",
             format_func=lambda x: {
                 "startup": "Startup",
@@ -142,67 +157,55 @@ def render_config_sidebar():
             }.get(x, x),
             help="Type of company/organization"
         )
-        
+
         # Industry
         st.selectbox(
             "Industry",
             options=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"],
-            index=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
-                st.session_state.get("config_industry", "generic")
-            ),
             key="config_industry",
-            help="Industry sector (affects default benefits)"
+            help="Industry sector"
         )
-        
+
         # Seniority
         st.selectbox(
             "Seniority Level",
             options=["", "intern", "junior", "mid", "senior", "lead", "principal"],
-            index=["", "intern", "junior", "mid", "senior", "lead", "principal"].index(
-                st.session_state.get("config_seniority_label", "") or ""
-            ),
             key="config_seniority_label",
             format_func=lambda x: "Not specified" if x == "" else x.title(),
             help="Seniority level for the role"
         )
-        
+
         # Experience years
         col1, col2 = st.columns(2)
         with col1:
-            min_val = st.session_state.get("config_min_years")
             st.number_input(
                 "Min Years Experience",
                 min_value=0,
                 max_value=20,
-                value=min_val if min_val is not None else 0,
                 key="config_min_years",
                 help="Minimum years of experience (0 = not specified)"
             )
         with col2:
-            max_val = st.session_state.get("config_max_years")
             st.number_input(
                 "Max Years Experience",
                 min_value=0,
                 max_value=20,
-                value=max_val if max_val is not None else 0,
                 key="config_max_years",
                 help="Maximum years of experience (0 = not specified)"
             )
-        
+
         # Skills (optional)
         st.text_area(
             "Required Skills",
             key="config_skills",
-            value=st.session_state.get("config_skills", ""),
             height=100,
             help="One skill per line. Optional: 'Skill (category, level)' format"
         )
-        
+
         # Benefit keywords (optional)
         st.text_area(
             "Benefit Keywords",
             key="config_benefit_keywords",
-            value=st.session_state.get("config_benefit_keywords", ""),
             height=80,
             help="Enter keywords separated by commas or one per line. Only these exact keywords will be used in the benefits section."
         )
@@ -247,32 +250,26 @@ def render_config_sidebar():
 
 
 def render_config_expander():
-    """Render configuration as an expander in the main content area."""
+    """Render configuration as an expander in the main content area.
+
+    NOTE: This function uses the SAME session-state keys as
+    ``render_config_sidebar``.  Only one of the two should be rendered per
+    page — never both — otherwise Streamlit raises DuplicateWidgetID.
+    """
+    _init_config_defaults()
+
     with st.expander("⚙️ Generation Settings", expanded=False):
-        # Advanced generation with blackboard architecture is always enabled
-        use_advanced = True
-        st.session_state.use_advanced_generation = True
-        
         st.markdown("---")
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            st.selectbox(
-                "Language",
-                options=["en", "de"],
-                index=0 if st.session_state.get("config_language", "en") == "en" else 1,
-                key="config_language",
-            )
-            
+            st.selectbox("Language", options=["en", "de"], key="config_language")
             st.selectbox(
                 "Tone",
                 options=["casual", "neutral", "formal"],
-                index=["casual", "neutral", "formal"].index(
-                    st.session_state.get("config_formality", "neutral")
-                ),
                 key="config_formality",
             )
-        
+
         with col2:
             _ct = [
                 "startup", "scaleup", "sme", "corporate", "public_sector",
@@ -281,9 +278,6 @@ def render_config_expander():
             st.selectbox(
                 "Company Type",
                 options=_ct,
-                index=_ct.index(
-                    st.session_state.get("config_company_type", "scaleup")
-                ),
                 key="config_company_type",
                 format_func=lambda x: {
                     "startup": "Startup",
@@ -298,34 +292,22 @@ def render_config_expander():
                     "retail": "Retail / Detailhandel",
                 }.get(x, x),
             )
-            
             st.selectbox(
                 "Industry",
                 options=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"],
-                index=["generic", "finance", "healthcare", "social_care", "public_it", "ai_startup", "ecommerce", "manufacturing"].index(
-                    st.session_state.get("config_industry", "generic")
-                ),
                 key="config_industry",
             )
-        
+
         with col3:
             st.selectbox(
                 "Seniority",
                 options=["", "intern", "junior", "mid", "senior", "lead", "principal"],
-                index=["", "intern", "junior", "mid", "senior", "lead", "principal"].index(
-                    st.session_state.get("config_seniority_label", "") or ""
-                ),
                 key="config_seniority_label",
                 format_func=lambda x: "Not specified" if x == "" else x.title(),
             )
-            
             col_min, col_max = st.columns(2)
             with col_min:
-                min_val = st.session_state.get("config_min_years")
-                st.number_input("Min Years", min_value=0, max_value=20, 
-                               value=min_val if min_val is not None else 0, key="config_min_years")
+                st.number_input("Min Years", min_value=0, max_value=20, key="config_min_years")
             with col_max:
-                max_val = st.session_state.get("config_max_years")
-                st.number_input("Max Years", min_value=0, max_value=20,
-                               value=max_val if max_val is not None else 0, key="config_max_years")
+                st.number_input("Max Years", min_value=0, max_value=20, key="config_max_years")
 

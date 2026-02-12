@@ -8,14 +8,18 @@ from services.scraping_service import extract_company_name_from_url
 
 def render_company_scraper_panel():
     """Render company scraping configuration panel in sidebar."""
+    # Initialise defaults once (avoids mutating state every render cycle)
+    st.session_state.setdefault("scraping_enabled", False)
+    for i in range(3):
+        st.session_state.setdefault(f"company_url_{i}", "")
+
     with st.sidebar:
         st.markdown("---")
         st.header("🏢 Company Scraping")
         
-        # Check if scraping is enabled
+        # key-only — value managed by session state
         scraping_enabled = st.checkbox(
             "Enable Company Scraping",
-            value=st.session_state.get("scraping_enabled", False),
             key="scraping_enabled",
             help="Scrape company websites to enhance job descriptions with company-specific information"
         )
@@ -29,7 +33,6 @@ def render_company_scraper_panel():
                 url_key = f"company_url_{i}"
                 url = st.text_input(
                     f"Company URL {i+1}",
-                    value=st.session_state.get(url_key, ""),
                     key=url_key,
                     placeholder="https://example.com/about"
                 )
@@ -139,9 +142,12 @@ def render_company_scraper_panel():
             except Exception as e:
                 st.error(f"Error loading configurations: {e}")
         else:
-            # Store empty URLs when disabled
-            st.session_state.company_urls = []
-            st.session_state.company_name = None
+            # Clear URLs when scraping is disabled, but only if they had
+            # values (avoids pointless state writes that trigger re-runs).
+            if st.session_state.get("company_urls"):
+                st.session_state["company_urls"] = []
+            if st.session_state.get("company_name"):
+                st.session_state["company_name"] = None
 
 
 def get_company_urls_from_session() -> list:

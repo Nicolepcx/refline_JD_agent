@@ -202,71 +202,23 @@ class JobGenerationConfig(BaseModel):
     def with_industry_defaults(self) -> "JobGenerationConfig":
         """
         Apply industry-specific defaults.
-        
-        Note: Default benefit keywords use Schweizer Schriftdeutsch / CH vocabulary
-        (e.g. 'berufliche Vorsorge' instead of 'betriebliche Altersvorsorge',
-         'Ferien' instead of 'Urlaub').
+
+        Benefits are NEVER auto-filled.  If the user did not provide
+        ``benefit_keywords``, the generator will produce an empty benefits
+        list — this is intentional so users stay in control of what appears
+        in the job ad.
+
+        Only structural overrides (e.g. ``company_type`` for public_it / ai_startup)
+        are applied here.
         """
         cfg = self.model_copy(deep=True)
 
-        if cfg.industry == "finance":
-            if not cfg.benefit_keywords:
-                cfg.benefit_keywords = [
-                    "berufliche Vorsorge (BVG)",
-                    "Weiterbildung im Bereich Finanzmarkt",
-                    "Bonusregelung",
-                    "hybrides Arbeiten",
-                ]
-
-        if cfg.industry == "healthcare":
-            if not cfg.benefit_keywords:
-                cfg.benefit_keywords = [
-                    "Work Life Balance",
-                    "betriebliche Gesundheitsförderung",
-                    "sicherer Arbeitsplatz",
-                ]
-
-        if cfg.industry == "social_care":
-            if not cfg.benefit_keywords:
-                cfg.benefit_keywords = [
-                    "Supervision und kollegiale Fallberatung",
-                    "Weiterbildungsmöglichkeiten im Sozialbereich",
-                    "Work-Life-Balance und familienfreundliche Arbeitszeiten",
-                    "betriebliche Gesundheitsförderung",
-                ]
-
+        # Structural overrides only — no benefit injection
         if cfg.industry == "public_it":
             cfg.company_type = "public_sector"
-            if not cfg.benefit_keywords:
-                cfg.benefit_keywords = [
-                    "Vereinbarkeit von Beruf und Familie",
-                    "attraktive Sozialleistungen",
-                    "sicheres Arbeitsumfeld im öffentlichen Dienst",
-                ]
 
         if cfg.industry == "ai_startup":
             cfg.company_type = "startup"
-            if not cfg.benefit_keywords:
-                cfg.benefit_keywords = [
-                    "remote friendly",
-                    "stock options",
-                    "Weiterbildungsbudget für Konferenzen",
-                    "modernes Büro im Stadtzentrum",
-                ]
-
-        if cfg.industry == "ecommerce" and not cfg.benefit_keywords:
-            cfg.benefit_keywords = [
-                "Mitarbeiterrabatte",
-                "flexible Arbeitszeiten",
-                "hybrides Arbeiten",
-            ]
-
-        if cfg.industry == "manufacturing" and not cfg.benefit_keywords:
-            cfg.benefit_keywords = [
-                "attraktive Schichtmodelle",
-                "Zuschuss zu Fahrtkosten",
-                "berufliche Vorsorge (BVG)",
-            ]
 
         return cfg
 
