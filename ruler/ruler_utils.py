@@ -12,37 +12,71 @@ from logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def _strip_openrouter_prefix(model: str) -> str:
+    """Strip the ``openrouter/`` routing prefix used by LiteLLM.
+
+    OpenRouter's native ``models`` body parameter expects bare model IDs
+    (e.g. ``openai/o3-mini``), not the ``openrouter/openai/o3-mini`` format
+    that LiteLLM uses for provider routing.
+    """
+    if model.startswith("openrouter/"):
+        return model[len("openrouter/"):]
+    return model
+
+
 async def score_group_with_fallback(
     group: art.TrajectoryGroup,
     primary_model: str | None = None,
-    fallback_model: str | None = None,
+    fallback_models: list[str] | None = None,
     *,
     debug: bool = False,
 ) -> Optional[art.TrajectoryGroup]:
-    """Score trajectories with a primary model and fall back on parsing errors."""
-    from config import MODEL_RULER_JUDGE, MODEL_RULER_JUDGE_FALLBACK
-    
-    # Use configured models if not provided
+    """Score trajectories using RULER with OpenRouter native model fallbacks.
+
+    Uses OpenRouter's ``models`` request-body parameter so that failover
+    between models happens at the API level — automatically retrying on
+    provider downtime, rate-limits, or content-moderation refusals.
+
+    See: https://openrouter.ai/docs/features/model-fallbacks
+
+    Returns ``None`` when scoring fails entirely so that callers can apply
+    their own graceful-degradation logic (e.g. assign default scores).
+    """
+    from config import MODEL_RULER_JUDGE, MODEL_RULER_JUDGE_FALLBACKS
+
     if primary_model is None:
         primary_model = MODEL_RULER_JUDGE
-    if fallback_model is None:
-        fallback_model = MODEL_RULER_JUDGE_FALLBACK
-    
+    if fallback_models is None:
+        fallback_models = MODEL_RULER_JUDGE_FALLBACKS
+
+    # Build extra_litellm_params with OpenRouter's native "models" fallback array.
+    # The primary model goes in the top-level `model=` param (LiteLLM routing format);
+    # the fallback models go in the body with bare OpenRouter IDs.
+    extra_params: dict | None = None
+    if fallback_models:
+        extra_params = {
+            "extra_body": {
+                "models": [_strip_openrouter_prefix(m) for m in fallback_models],
+            }
+        }
+
     try:
-        return await ruler_score_group(group, primary_model, debug=debug)
-    except AssertionError as e:
-        logger.warning(
-            f"RULER scoring failed to parse scores for model '{primary_model}'. "
-            f"Falling back to '{fallback_model}'. Error: {e}"
+        return await ruler_score_group(
+            group,
+            primary_model,
+            extra_litellm_params=extra_params,
+            debug=debug,
         )
-        return await ruler_score_group(group, fallback_model, debug=debug)
-    except Exception as e:
-        logger.warning(
-            f"RULER scoring failed for model '{primary_model}'. "
-            f"Falling back to '{fallback_model}'. Error: {e}",
+    except Exception as exc:
+        logger.error(
+            "RULER scoring failed for model '%s' (fallbacks: %s). "
+            "Returning None so callers can degrade gracefully. Error: %s",
+            primary_model,
+            fallback_models,
+            exc,
             exc_info=True,
         )
-        return await ruler_score_group(group, fallback_model, debug=debug)
+        return None
 
 
 def jd_candidate_to_trajectory(

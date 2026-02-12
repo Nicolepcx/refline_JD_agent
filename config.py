@@ -74,9 +74,19 @@ MODEL_STYLE = os.getenv("MODEL_STYLE", "google/gemma-2-9b-it")
 # Format: "openrouter/openai/o3-mini" (full format with prefix for RULER which uses model strings directly)
 MODEL_RULER_JUDGE = os.getenv("MODEL_RULER_JUDGE", "openrouter/openai/o3-mini")
 
-# RULER Judge Fallback: Fallback model if primary judge model fails
-# Format: "openrouter/openai/o3-mini" (full format with prefix for RULER which uses model strings directly)
-MODEL_RULER_JUDGE_FALLBACK = os.getenv("MODEL_RULER_JUDGE_FALLBACK", "openrouter/openai/o3-mini")
+# RULER Judge Fallback Models: Comma-separated list of fallback models for RULER scoring.
+# These are passed to OpenRouter's native "models" fallback array so failover happens
+# at the API level (automatic retry on provider downtime, rate-limits, content moderation).
+# Format: LiteLLM routing format with "openrouter/" prefix (prefix is stripped automatically
+# before sending to OpenRouter's body).
+# See: https://openrouter.ai/docs/features/model-fallbacks
+_ruler_fallbacks_raw = os.getenv(
+    "MODEL_RULER_JUDGE_FALLBACKS",
+    "openrouter/google/gemini-2.5-flash,openrouter/openai/gpt-4o-mini",
+)
+MODEL_RULER_JUDGE_FALLBACKS: list[str] = [
+    m.strip() for m in _ruler_fallbacks_raw.split(",") if m.strip()
+]
 
 # Embedding Model: Used for vector store (style chunks, company content)
 # Format: "openai/text-embedding-3-small" (routed via OpenRouter)

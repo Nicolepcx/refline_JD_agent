@@ -509,9 +509,9 @@ async def node_ruler_scorer(state: JobState) -> Dict:
     group = art.TrajectoryGroup(trajectories)
     
     # Score candidates using configured RULER judge model
-    from config import MODEL_RULER_JUDGE, MODEL_RULER_JUDGE_FALLBACK
+    from config import MODEL_RULER_JUDGE
     judged_group = await score_group_with_fallback(
-        group, MODEL_RULER_JUDGE, fallback_model=MODEL_RULER_JUDGE_FALLBACK, debug=False
+        group, MODEL_RULER_JUDGE, debug=False
     )
     
     # Store RULER scores for each candidate (for refinement decisions)
@@ -596,9 +596,9 @@ async def node_ruler_curator(state: JobState) -> Dict:
         group = art.TrajectoryGroup(trajectories)
         
         # Re-score using configured RULER judge model
-        from config import MODEL_RULER_JUDGE, MODEL_RULER_JUDGE_FALLBACK
+        from config import MODEL_RULER_JUDGE
         judged_group = await score_group_with_fallback(
-            group, MODEL_RULER_JUDGE, fallback_model=MODEL_RULER_JUDGE_FALLBACK, debug=False
+            group, MODEL_RULER_JUDGE, debug=False
         )
         
         if not judged_group:
